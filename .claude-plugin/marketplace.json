@@ -1,0 +1,14 @@
+{
+  "name": "claude-task-dash",
+  "owner": {
+    "name": "qiqll"
+  },
+  "description": "Claude Code 任务流水线面板：配合 task-* 技能的只读仪表盘",
+  "plugins": [
+    {
+      "name": "task-dash",
+      "source": "./plugins/task-dash",
+      "description": "任务流水线面板：只读展示 .claude/backlog.md 任务池、自动循环、worker 与运行流水"
+    }
+  ]
+}
