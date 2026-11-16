@@ -1,76 +1,54 @@
-# claude-task-dash
+# claude-task
 
-**Claude Code 任务流水线面板**：把 `.claude/backlog.md` 任务池、自动循环的当前 worker、交付指标和运行流水，放进 Claude Code 的右侧面板和输入框下方的状态行。
-
-它是 `task-*` 技能体系（`/task-init` `/task-add` `/task-next` `/task-loop` `/task-status`）的只读仪表盘：只读文件，从不修改任务池。
-
-> **前提**：面板只负责展示，任务池由 `task-*` 技能维护，这些技能**不包含在本仓库**。没有它们也能用：按下文「最小任务池」手写 `.claude/backlog.md` 即可看到面板。
+**Claude Code 异步任务流水线**：一个插件装齐——`task:*` 技能维护 `.claude/backlog.md` 任务池（录入、单步交付、后台 worker 自动循环、机器验收），右侧面板和输入框下方状态行实时展示进度。
 
 ## 安装
 
 在 Claude Code 终端会话的输入框里：
 
 ```text
-/plugin install task-dash --marketplace qiqll/claude-task-dash
+/plugin install task --marketplace qiqll/claude-task
 ```
 
-提示 `Add marketplace?` 时按 `y`，然后选择安装范围（推荐 user）。安装后**新开一个会话**生效（`/task-dash` 命令和定时刷新在会话启动时注册）。
+提示 `Add marketplace?` 时按 `y`，选择安装范围（推荐 user），然后**新开一个会话**生效。
 
-## 使用
+## 命令
+
+| 命令 | 作用 |
+|---|---|
+| `/task:init` | 在项目根建任务池：`.claude/backlog.md` / `dev-plan.md` / `dev-progress.md` + `inbox/` `auto/` 运行目录 |
+| `/task:add <需求>` | 口语化需求 → 规范条目（分配 ID、判优先级、写验收标准），只录入不实施 |
+| `/task:next [T-NNN]` | 手动单步：挑一个任务实施 → 审查门禁 → 提交 → 转「待验证」后停下 |
+| `/task:loop [max=10] [hours=8]` | 自动循环：主会话只调度，每个任务派后台 worker（`/task:auto`），机器重跑测试验收 |
+| `/task:status` | 全局视图：各优先级计数、待决策、阻塞、下一步建议 |
+| `/task-dash [inline\|off\|on]` | 打开右侧面板；`off`/`on` 隐藏或恢复状态行 |
+| `qtask "描述"` | 终端里往运行中的循环投递任务 / 决策（插件 `bin/`，`qtask -h` 看用法） |
+
+状态机：`待开始 → 进行中 → 待验证 → 已完成`，旁路 `阻塞` / `待决策` / `打回`。任务完成态是「待验证」，需求方确认后才归档。
+
+`/task:loop` 需要 git 仓库（记开工 SHA、按提交验收）；`/task:add` `/task:next` `/task:status` 不需要。
+
+## 面板与状态行
 
 | 位置 | 内容 | 操作 |
 |---|---|---|
-| 输入框下方状态行 | `任务流水线 ● 运行中 · T-071 标题 · 12m · 待验证 2 · 待决策 1 · /task-dash`（无当前任务时显示「待开始 N」） | `/task-dash off` 隐藏，`/task-dash on` 恢复 |
+| 输入框下方状态行 | `任务流水线 ● 运行中 · T-071 标题 · 12m · 待验证 2 · 待决策 1 · /task-dash` | `/task-dash off` / `on` |
 | 右侧面板 | 循环状态、当前任务、指标、可筛选任务列表、待决策、人工阻塞、Agent、最近流水 | `/task-dash` 打开；`ctrl+x tab` 聚焦，`r` 刷新，`Esc` 或 `ctrl+x x` 关闭 |
 | 提醒 | 任务进入待验证 / 待决策 / 阻塞时弹 toast | — |
 
-**右侧停靠需要 Claude Code 的全屏布局**，并且终端至少 110 列：
+**右侧停靠需要 Claude Code 的全屏布局**，且终端至少 110 列：
 
 ```sh
 CLAUDE_CODE_NO_FLICKER=1 claude      # 或在 ~/.zshrc 里 export
 ```
 
-不满足时 `/task-dash` 不会把面板插到输入框上方挡住输出，只给出提示；确实想内嵌就用 `/task-dash inline`。
+不满足时 `/task-dash` 不会把面板插到输入框上方挡住输出，只给提示；确实想内嵌用 `/task-dash inline`。
 
-## 数据来源
+### 界面语言
 
-从会话目录向上找到第一个含 `.claude/backlog.md` 的目录，读取：
+面板、状态行和提醒跟随操作系统语言（中文系统显示中文，其余英文）。判定顺序：插件设置 `language` → macOS 系统首选语言 → `LC_ALL` / `LC_MESSAGES` / `LANG` → 运行时 locale。系统语言优先于 `LANG`，因为终端常设 `en_US` 而系统是中文。
 
-```text
-.claude/
-├── backlog.md        # P0–P3 任务表、待决策、人工阻塞
-├── dev-progress.md   # 已归档任务（### T-NNN）
-├── inbox/            # 待合并投递（只计数）
-└── auto/
-    ├── current       # 当前派发：task / phase / worker / started …
-    ├── session       # 循环计数：run_started / max / hours / done / noprog
-    ├── run.log       # 时间 | T-NNN | 事件 | …
-    └── STOP          # 停机标记
-```
-
-每 5 秒、每轮对话结束、每个子 agent 结束时刷新；内容没变不重绘。
-
-### 最小任务池
-
-没有 `task-*` 技能时，手写一个 `.claude/backlog.md` 就能用（`auto/`、`dev-progress.md` 都可省略）：
-
-```markdown
-## P1 — 重要
-
-| ID | 任务 | 模块 | 状态 | 依赖 | 备注 |
-|----|------|------|------|------|------|
-| T-001 | 给登录接口加限流 | backend | 进行中 | — | 验收：pytest tests/test_auth.py 通过 |
-| T-002 | 统一错误码 | backend | 待开始 | T-001 | — |
-
-## 待决策
-
-| 任务 | 问题 | 选项（推荐在前） | 挂起时间 |
-|------|------|-----------------|---------|
-```
-
-- 优先级标题以 `P0`–`P3` 开头；任务 ID 形如 `T-NNN`。
-- 状态取值：`待开始` `进行中` `待验证` `待决策` `阻塞` `打回` `已完成` `已取消`（可带后缀，如 `待验证✗验证失败`）。
-- 备注里的 `验收：…` 会显示为验收标准，`衍生自 T-NNN` 显示来源。
+固定某种语言：`/config` 里把 task 插件的 `language` 设为 `zh` 或 `en`。任务池内容（标题、备注）按原文显示，不翻译。
 
 ### 指标口径
 
@@ -83,15 +61,30 @@ CLAUDE_CODE_NO_FLICKER=1 claude      # 或在 ~/.zshrc 里 export
 | 中位周期 | run.log 中 `DISPATCH` 到结果事件的中位时长 |
 | 疑似中断 | 循环在跑或等待任务，但 3 小时无任何活动，或已超出时长预算 3 小时以上 |
 
+## 文件
+
+```text
+.claude/
+├── backlog.md        # P0–P3 任务表、待决策、人工阻塞、ID 规则（需求方入口）
+├── dev-plan.md       # AI 维护的排期与进行中任务
+├── dev-progress.md   # 已归档任务（### T-NNN）
+├── inbox/            # qtask / 调度员投递，循环单点合并
+└── auto/             # current / session / run.log / STOP（运行态，gitignore）
+```
+
+## 审查门禁与专业 agent
+
+`/task:next` 与 worker 交付前会派 `code-reviewer`（涉及认证 / 用户输入 / 上传 / 加密时加 `security-analyst`）审查改动。环境里没有这些 agent 时，技能改派 `general-purpose` 子 agent 做同样的只读审查。项目 `CLAUDE.md` 有更严的门禁或测试口径时以项目为准。
+
 ## 开发
 
 ```sh
-claude plugin validate plugins/task-dash
-claude plugin test plugins/task-dash
-claude --plugin-dir plugins/task-dash     # 从源码加载
+claude plugin validate plugins/task
+claude plugin test plugins/task
+claude --plugin-dir plugins/task     # 从源码加载
 ```
 
-本仓库自身也用 `task-*` 体系管理，任务池在 `.claude/`。
+本仓库自身也用这套任务池管理，见 `.claude/`。
 
 ## License
 

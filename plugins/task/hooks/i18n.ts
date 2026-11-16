@@ -1,0 +1,194 @@
+/**
+ * UI language: the dashboard's own words in Chinese or English. Pool data
+ * (titles, notes) is shown as written; status values are translated as labels.
+ */
+import type { LoopStatus } from '../types'
+
+export type Lang = 'zh' | 'en'
+
+/** One locale tag (`zh-Hans-CN`, `zh_CN.UTF-8`, `en_US`) → a UI language, or null when it says nothing. */
+export function langOf(tag: string | undefined | null): Lang | null {
+  const t = (tag ?? '').trim().replace(/^"|"$/g, '').toLowerCase()
+  if (!t || t === 'c' || t === 'posix' || t.startsWith('c.')) return null
+  return t.startsWith('zh') ? 'zh' : 'en'
+}
+
+/** The first entry of `defaults read -g AppleLanguages` output, `(\n    "zh-Hans-CN",\n ...)`. */
+export function firstAppleLanguage(output: string): string | null {
+  return /^\s*"?([A-Za-z]{2,3}[-_A-Za-z0-9]*)"?,?\s*$/m.exec(output.replace(/^\s*\(\s*/, ''))?.[1] ?? null
+}
+
+/**
+ * The setting wins unless `auto`; then the OS's own language list (macOS),
+ * then the locale variables in POSIX order, then the runtime's locale.
+ * The OS list comes before LANG: a terminal often says `en_US` on a Chinese system.
+ */
+export function pickLang(setting: unknown, sources: { system?: string | null; env: (string | undefined)[]; runtime?: string }): Lang {
+  if (setting === 'zh' || setting === 'en') return setting
+  return langOf(sources.system) ?? sources.env.map(langOf).find(Boolean) ?? langOf(sources.runtime) ?? 'en'
+}
+
+const STATUS_EN: Record<string, string> = {
+  待开始: 'To do',
+  进行中: 'In progress',
+  待验证: 'To verify',
+  待决策: 'Decision',
+  阻塞: 'Blocked',
+  打回: 'Rejected',
+  已完成: 'Done',
+  已取消: 'Cancelled',
+}
+
+export type Transition = { id: string; kind: 'new' | 'move'; status: string; title: string }
+
+const zh = {
+  title: '任务流水线',
+  loop: {
+    running: '运行中',
+    waiting: '循环中·等待任务',
+    halted: '已叫停',
+    stopped: '已停止',
+    idle: '空闲',
+    uninitialized: '未初始化',
+    stale: '疑似中断',
+  } as Record<LoopStatus, string>,
+  status: (s: string) => s,
+  filters: { active: '活跃', todo: '待开始', verify: '待验证', decision: '待决策', blocked: '阻塞', all: '全部' } as Record<string, string>,
+  noCurrent: '当前没有执行中的任务',
+  inboxPending: (n: number) => `inbox 待合并 ${n} 条`,
+  phase: (p: string) => `阶段 ${p}`,
+  elapsed: (d: string) => `已运行 ${d}`,
+  baseline: (sha: string) => `基线 ${sha}`,
+  noTitle: '（backlog 中未找到标题）',
+  halt: (n: string) => `断点：${n}`,
+  deps: (d: string) => `依赖 ${d}`,
+  derivedFrom: (id: string) => `衍生自 ${id}`,
+  acceptance: (a: string) => `验收：${a}`,
+  noNote: '无备注',
+  agentRunning: '运行中',
+  agentDone: '已结束',
+  stopAfter: '（本任务后停机）',
+  staleHint: '（调度会话可能已退出，说「继续」或 /task:loop 恢复）',
+  refresh: '刷新',
+  loading: '加载任务池…',
+  noPool: '当前工作区（及上级目录）没有 .claude/backlog.md。',
+  runInit: '运行 /task:init 初始化任务池。',
+  delivered: (done: number, max: number | null) => (max !== null ? `已交付 ${done}/${max}` : `已交付 ${done}`),
+  noprog: (n: number) => `无进展 ${n}`,
+  currentTask: '当前任务',
+  stats: {
+    completion: '完成率',
+    delivery: '交付率',
+    firstPass: '一次通过',
+    delivered7d: '7日交付',
+    medianCycle: '中位周期',
+    wip: 'WIP',
+    verify: '待验证',
+    archived: '已归档',
+  },
+  tasks: '任务',
+  count: (n: number) => `${n} 条`,
+  noneInFilter: '这个筛选下没有任务。',
+  decisions: '待决策',
+  decisionsExtra: (n: number) => `${n} 条 · 在会话里说「T-0NN 选 A」答复`,
+  humanBlocks: '人工阻塞',
+  agents: 'Agent',
+  runningCount: (n: number) => `${n} 运行中`,
+  noAgents: '本会话还没有派发子 agent。/task:loop 派 worker 后会出现在这里。',
+  events: '最近流水',
+  noEvents: '还没有运行记录。',
+  footer: (sec: number) => `只读 · 每 ${sec}s 刷新 · 数据来自 .claude/backlog.md 与 .claude/auto/`,
+  readTimeout: (sec: number) => `读取任务池超时（>${sec}s），已放弃本次读取`,
+  toast: (t: Transition) => `任务流水线：${t.id} ${t.kind === 'new' ? '新录入' : '→'} ${t.status}：${t.title.slice(0, 40)}`,
+  countOf: (status: string, n: number) => `${status} ${n}`,
+  cmdDescription: '打开任务流水线面板（右侧停靠）；off / on 隐藏或恢复输入框下方的状态行；inline 强制内嵌',
+  statusOff: '已隐藏输入框下方的任务流水线状态行。',
+  statusOn: '已恢复输入框下方的任务流水线状态行。',
+  narrow: (cols: number, min: number) => `终端只有 ${cols} 列，停靠到右侧至少需要 ${min} 列`,
+  notFullscreen: '当前不是全屏布局，面板只能内嵌在输入框上方，会挡住输出',
+  notOpened: (why: string) =>
+    `${why}，所以没有打开面板。摘要已显示在输入框下方的状态行。\n要右侧停靠：用全屏布局启动（CLAUDE_CODE_NO_FLICKER=1 claude，tmux 里默认不是全屏）并把终端拉宽；仍想内嵌就用 /task-dash inline。`,
+  openedDock: '任务流水线面板已在右侧打开（Esc 或 ctrl+x x 关闭）。',
+  openedInline: '任务流水线面板已内嵌打开。',
+}
+
+export type Strings = typeof zh
+
+const en: Strings = {
+  title: 'Task Pipeline',
+  loop: {
+    running: 'Running',
+    waiting: 'Looping · waiting',
+    halted: 'Halted',
+    stopped: 'Stopped',
+    idle: 'Idle',
+    uninitialized: 'Not initialized',
+    stale: 'Possibly interrupted',
+  },
+  status: s => STATUS_EN[s] ?? s,
+  filters: { active: 'Active', todo: 'To do', verify: 'To verify', decision: 'Decision', blocked: 'Blocked', all: 'All' },
+  noCurrent: 'No task is running',
+  inboxPending: n => `inbox ${n} to merge`,
+  phase: p => `phase ${p}`,
+  elapsed: d => `running ${d}`,
+  baseline: sha => `base ${sha}`,
+  noTitle: '(title not found in backlog)',
+  halt: n => `Breakpoint: ${n}`,
+  deps: d => `depends on ${d}`,
+  derivedFrom: id => `derived from ${id}`,
+  acceptance: a => `Acceptance: ${a}`,
+  noNote: 'No notes',
+  agentRunning: 'running',
+  agentDone: 'finished',
+  stopAfter: ' (stops after this task)',
+  staleHint: ' (dispatcher may have exited; say "continue" or run /task:loop)',
+  refresh: 'Refresh',
+  loading: 'Loading task pool…',
+  noPool: 'No .claude/backlog.md in this workspace or its parents.',
+  runInit: 'Run /task:init to create a task pool.',
+  delivered: (done, max) => (max !== null ? `delivered ${done}/${max}` : `delivered ${done}`),
+  noprog: n => `no progress ${n}`,
+  currentTask: 'Current task',
+  stats: {
+    completion: 'Done',
+    delivery: 'Delivered',
+    firstPass: 'First pass',
+    delivered7d: '7d delivered',
+    medianCycle: 'Median cycle',
+    wip: 'WIP',
+    verify: 'To verify',
+    archived: 'Archived',
+  },
+  tasks: 'Tasks',
+  count: n => `${n}`,
+  noneInFilter: 'No tasks under this filter.',
+  decisions: 'Decisions',
+  decisionsExtra: n => `${n} · answer in chat, e.g. "T-0NN pick A"`,
+  humanBlocks: 'Human blockers',
+  agents: 'Agents',
+  runningCount: n => `${n} running`,
+  noAgents: 'No subagents yet this session. Workers sent by /task:loop show up here.',
+  events: 'Recent log',
+  noEvents: 'No runs logged yet.',
+  footer: sec => `Read-only · refreshes every ${sec}s · from .claude/backlog.md and .claude/auto/`,
+  readTimeout: sec => `Reading the task pool timed out (>${sec}s); this read was dropped`,
+  toast: t => `Task Pipeline: ${t.id} ${t.kind === 'new' ? 'added as' : '→'} ${STATUS_EN[t.status] ?? t.status}: ${t.title.slice(0, 40)}`,
+  countOf: (status, n) => `${STATUS_EN[status] ?? status} ${n}`,
+  cmdDescription: 'Open the task pipeline pane (docked right); off / on hides or restores the status line; inline forces an inline pane',
+  statusOff: 'Task pipeline status line hidden.',
+  statusOn: 'Task pipeline status line restored.',
+  narrow: (cols, min) => `The terminal is ${cols} columns wide; docking needs at least ${min}`,
+  notFullscreen: 'Not in the fullscreen layout, so the pane could only sit above the prompt and cover the output',
+  notOpened: why =>
+    `${why}, so the pane was not opened. The summary is in the status line under the prompt.\nTo dock it on the right, start in the fullscreen layout (CLAUDE_CODE_NO_FLICKER=1 claude; tmux is not fullscreen by default) and widen the terminal; use /task-dash inline to open it inline anyway.`,
+  openedDock: 'Task pipeline pane opened on the right (Esc or ctrl+x x closes it).',
+  openedInline: 'Task pipeline pane opened inline.',
+}
+
+export const STRINGS: Record<Lang, Strings> = { zh, en }
+
+/** A status as written (`待验证✗验证失败`) in the UI language: base status translated, suffix kept. */
+export function statusLabel(s: Strings, base: string, raw: string): string {
+  const label = raw || base
+  return label.startsWith(base) ? s.status(base) + label.slice(base.length) : s.status(label)
+}

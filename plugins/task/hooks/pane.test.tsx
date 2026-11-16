@@ -32,6 +32,8 @@ test('pane draws the pool and filters on every surface', async ($, on) => {
   on('fs.exists', (_$, e) => ({ value: e.path in FILES }))
   on('fs.list', () => ({ value: [] }))
   on('ui.open', () => ({ value: { isPlaced: true as const } }))
+  on('process.run', () => ({ value: { exitCode: 0, stdout: '(\n    "zh-Hans-CN"\n)\n', stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }))
+  on('env.get', () => ({ value: 'en_US.UTF-8' }))
   on('ui.status', (_$, e) => {
     statuses.push(e.text)
     return { value: undefined }
@@ -46,7 +48,7 @@ test('pane draws the pool and filters on every surface', async ($, on) => {
   expect(statuses.at(-1)).toContain('T-071 人工放行池管理')
   expect(statuses.at(-1)).toContain('待验证 1')
   for (const surface of ['terminal', 'desktop'] as const) {
-    const ui = await $.ui.mount({ plugin: 'task-dash', surface, component: 'Pane', requestId: 'task-dash', props: PANE_PROPS })
+    const ui = await $.ui.mount({ plugin: 'task', surface, component: 'Pane', requestId: 'task-dash', props: PANE_PROPS })
     // Root found from a subdirectory; current task and loop state shown.
     expect(await ui.find({ type: 'Text', text: /运行中/ })).toBeDefined()
     // The pane names the project whose pool it shows (found above cwd here).
@@ -78,9 +80,11 @@ test('pane says how to start when there is no pool', async ($, on) => {
     return { value: undefined }
   })
   on('fs.read', () => ({ deny: 'ENOENT' }))
+  on('process.run', () => ({ value: { exitCode: 0, stdout: '(\n    "zh-Hans"\n)', stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }))
+  on('env.get', () => ({ value: undefined }))
   await $.command.run(RUN)
-  const ui = await $.ui.mount({ plugin: 'task-dash', surface: 'terminal', component: 'Pane', requestId: 'task-dash', props: PANE_PROPS })
-  expect(await ui.find({ type: 'Text', text: /task-init/ })).toBeDefined()
+  const ui = await $.ui.mount({ plugin: 'task', surface: 'terminal', component: 'Pane', requestId: 'task-dash', props: PANE_PROPS })
+  expect(await ui.find({ type: 'Text', text: /task:init/ })).toBeDefined()
   await ui.unmount()
 })
 
@@ -92,6 +96,8 @@ test('without a dock the command does not open an inline pane over the transcrip
   on('fs.list', () => ({ value: [] }))
   on('fs.read', (_$, e) => (FILES[e.path] === undefined ? { deny: 'ENOENT' } : { value: FILES[e.path]! }))
   on('ui.status', () => ({ value: undefined }))
+  on('process.run', () => ({ deny: 'not macOS' }))
+  on('env.get', (_$, e) => ({ value: e.name === 'LANG' ? 'zh_CN.UTF-8' : undefined }))
   on('ui.open', (_$, e) => {
     opened.push(e.id)
     return { value: { isPlaced: true as const } }
@@ -101,4 +107,48 @@ test('without a dock the command does not open an inline pane over the transcrip
   expect(opened).toEqual([])
   await $.command.run({ ...RUN, args: 'inline', presentation: { isFullscreen: false, columns: 200 } })
   expect(opened).toEqual(['task-dash'])
+})
+
+test('an English system draws the pane and status line in English', async ($, on) => {
+  const statuses: (string | undefined)[] = []
+  on('session.cwd', () => ({ value: '/proj' }))
+  on('clock.now', () => ({ value: new Date(2026, 10, 15, 12, 0, 0).getTime() }))
+  on('fs.exists', (_$, e) => ({ value: e.path in FILES }))
+  on('fs.list', () => ({ value: [] }))
+  on('fs.read', (_$, e) => (FILES[e.path] === undefined ? { deny: 'ENOENT' } : { value: FILES[e.path]! }))
+  on('ui.open', () => ({ value: { isPlaced: true as const } }))
+  // System says English even though LANG says Chinese: the system wins.
+  on('process.run', () => ({ value: { exitCode: 0, stdout: '(\n    "en-US"\n)', stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }))
+  on('env.get', () => ({ value: 'zh_CN.UTF-8' }))
+  on('ui.status', (_$, e) => {
+    statuses.push(e.text)
+    return { value: undefined }
+  })
+  expect(await $.command.run(RUN)).toMatchObject({ text: expect.stringContaining('opened on the right') })
+  expect(statuses.at(-1)).toContain('Task Pipeline ● Running')
+  expect(statuses.at(-1)).toContain('To verify 1')
+  for (const surface of ['terminal', 'desktop'] as const) {
+    const ui = await $.ui.mount({ plugin: 'task', surface, component: 'Pane', requestId: 'task-dash', props: PANE_PROPS })
+    expect(await ui.find({ type: 'Text', text: 'Current task' })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: / In progress/ })).toBeDefined()
+    // Pool data stays as written.
+    expect(await ui.find({ type: 'Text', text: /人工放行池管理/ })).toBeDefined()
+    await ui.unmount()
+  }
+})
+
+test('the language setting overrides the system', { options: { language: 'en' } }, async ($, on) => {
+  on('session.cwd', () => ({ value: '/empty' }))
+  on('clock.now', () => ({ value: 0 }))
+  on('fs.exists', () => ({ value: false }))
+  on('fs.list', () => ({ value: [] }))
+  on('fs.read', () => ({ deny: 'ENOENT' }))
+  on('ui.status', () => ({ value: undefined }))
+  on('ui.open', () => ({ value: { isPlaced: true as const } }))
+  on('process.run', () => ({ value: { exitCode: 0, stdout: '("zh-Hans")', stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }))
+  on('env.get', () => ({ value: 'zh_CN.UTF-8' }))
+  await $.command.run(RUN)
+  const ui = await $.ui.mount({ plugin: 'task', surface: 'terminal', component: 'Pane', requestId: 'task-dash', props: PANE_PROPS })
+  expect(await ui.find({ type: 'Text', text: /task:init to create/ })).toBeDefined()
+  await ui.unmount()
 })

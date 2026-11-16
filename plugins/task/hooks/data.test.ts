@@ -123,10 +123,10 @@ describe('snapshot', () => {
     const before = buildSnapshot('/proj', files, NOW)
     const after = buildSnapshot('/proj', { ...files, backlog: BACKLOG.replace('| 进行中 |', '| 待验证 |').replace('| 待开始 |', '| 进行中 |') }, NOW)
     expect(transitions(null, after)).toEqual([])
-    expect(transitions(before, after)).toEqual(['T-071 → 待验证：人工放行池管理'])
+    expect(transitions(before, after)).toEqual([{ id: 'T-071', kind: 'move', status: '待验证', title: '人工放行池管理' }])
     // A task recorded straight as 待决策 is announced; a new 待开始 one is not.
     const added = buildSnapshot('/proj', { ...files, backlog: BACKLOG.replace('| T-111 |', '| T-120 | 新问题 | 后端 | 待决策 | — | — |\n| T-121 | 普通 | 后端 | 待开始 | — | — |\n| T-111 |') }, NOW)
-    expect(transitions(before, added)).toEqual(['T-120 新录入 待决策：新问题'])
+    expect(transitions(before, added)).toEqual([{ id: 'T-120', kind: 'new', status: '待决策', title: '新问题' }])
     // A duplicated row of a task does not toast again on an unrelated edit.
     const dup = BACKLOG.replace('| T-111 |', '| T-071 | 重复行 | 后端 | 阻塞 | — | — |\n| T-111 |')
     const d1 = buildSnapshot('/proj', { ...files, backlog: dup }, NOW)

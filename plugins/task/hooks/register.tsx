@@ -1,11 +1,12 @@
 import { atom, read, update } from 'claude-code'
-import type { EngineInterface, Register } from 'claude-code'
+import type { EngineInterface, PluginOptions, Register } from 'claude-code'
 
 import type { AgentRow, PoolFiles, Snapshot, Task } from '../types'
 import { buildSnapshot, duration, percent, taskIdIn, transitions } from './data'
+import { firstAppleLanguage, pickLang, STRINGS, statusLabel } from './i18n'
+import type { Lang, Strings } from './i18n'
 
 const PANE = 'task-dash'
-const PANE_TITLE = '任务流水线'
 const REFRESH_MS = 5000
 const READ_TIMEOUT_MS = 4000
 const ROOT_CACHE_MS = 30_000
@@ -13,23 +14,68 @@ const MAX_AGENTS = 20
 /** Below this the terminal cannot dock a pane beside the transcript. */
 const DOCK_MIN_COLUMNS = 110
 
-const snapshot = atom({ plugin: 'task-dash', key: 'snapshot' } as const, null)
-const filter = atom({ plugin: 'task-dash', key: 'filter' } as const, 'active')
-const openTask = atom({ plugin: 'task-dash', key: 'openTask' } as const, null)
-const agents = atom({ plugin: 'task-dash', key: 'agents' } as const, [])
-const statusHidden = atom({ plugin: 'task-dash', key: 'statusHidden' } as const, false)
+const snapshot = atom({ plugin: 'task', key: 'snapshot' } as const, null)
+const filter = atom({ plugin: 'task', key: 'filter' } as const, 'active')
+const openTask = atom({ plugin: 'task', key: 'openTask' } as const, null)
+const agents = atom({ plugin: 'task', key: 'agents' } as const, [])
+const statusHidden = atom({ plugin: 'task', key: 'statusHidden' } as const, false)
 /** Clock of the last read; ticks while a task runs so elapsed times move without rewriting the snapshot. */
-const nowAtom = atom({ plugin: 'task-dash', key: 'now' } as const, 0)
-const lastError = atom({ plugin: 'task-dash', key: 'error' } as const, null)
+const nowAtom = atom({ plugin: 'task', key: 'now' } as const, 0)
+const lastError = atom({ plugin: 'task', key: 'error' } as const, null)
+/** UI language as detected at session start (or forced by the `language` setting). */
+const langAtom = atom({ plugin: 'task', key: 'lang' } as const, null)
+
+/** The runtime's own guess, used until detection has run. */
+function runtimeLocale(): string | undefined {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().locale
+  } catch {
+    return undefined
+  }
+}
+
+/** The strings of the current draw or read; set from langAtom before each use. */
+let L: Strings = STRINGS[pickLang('auto', { env: [], runtime: runtimeLocale() })]
+
+async function currentStrings($: EngineInterface): Promise<Strings> {
+  L = STRINGS[(await read($, langAtom)) ?? pickLang('auto', { env: [], runtime: runtimeLocale() })]
+  return L
+}
+
+/** Setting → macOS AppleLanguages → LC_ALL / LC_MESSAGES / LANG → runtime. */
+async function detectLang($: EngineInterface, options: PluginOptions): Promise<Lang> {
+  const setting = options.language
+  if (setting === 'zh' || setting === 'en') return setting
+  const apple = await $.process
+    .run(['defaults', 'read', '-g', 'AppleLanguages'])
+    .then(r => (r.exitCode === 0 ? firstAppleLanguage(r.stdout) : null))
+    .catch(() => null)
+  const env = await Promise.all([
+    $.env.get('LC_ALL').catch(() => undefined),
+    $.env.get('LC_MESSAGES').catch(() => undefined),
+    $.env.get('LANG').catch(() => undefined),
+  ])
+  return pickLang(setting, { system: apple, env, runtime: runtimeLocale() })
+}
+
+let langDetected = false
+
+async function ensureLang($: EngineInterface, options: PluginOptions, force = false) {
+  if (langDetected && !force) return
+  langDetected = true
+  const lang = await detectLang($, options)
+  if ((await read($, langAtom)) !== lang) await update($, langAtom, () => lang)
+  L = STRINGS[lang]
+}
 
 const ACTIVE = new Set(['进行中', '打回', '待决策', '阻塞', '待验证'])
-const FILTERS: { key: string; label: string; match: (t: Task) => boolean }[] = [
-  { key: 'active', label: '活跃', match: t => ACTIVE.has(t.status) },
-  { key: 'todo', label: '待开始', match: t => t.status === '待开始' },
-  { key: 'verify', label: '待验证', match: t => t.status === '待验证' },
-  { key: 'decision', label: '待决策', match: t => t.status === '待决策' },
-  { key: 'blocked', label: '阻塞', match: t => t.status === '阻塞' || t.status === '打回' },
-  { key: 'all', label: '全部', match: () => true },
+const FILTERS: { key: string; match: (t: Task) => boolean }[] = [
+  { key: 'active', match: t => ACTIVE.has(t.status) },
+  { key: 'todo', match: t => t.status === '待开始' },
+  { key: 'verify', match: t => t.status === '待验证' },
+  { key: 'decision', match: t => t.status === '待决策' },
+  { key: 'blocked', match: t => t.status === '阻塞' || t.status === '打回' },
+  { key: 'all', match: () => true },
 ]
 
 const STATUS_COLOR: Record<string, string> = {
@@ -41,15 +87,6 @@ const STATUS_COLOR: Record<string, string> = {
   已完成: 'success',
 }
 const PRIORITY_COLOR: Record<string, string> = { P0: 'error', P1: 'warning' }
-const LOOP_TEXT: Record<string, string> = {
-  running: '运行中',
-  waiting: '循环中·等待任务',
-  halted: '已叫停',
-  stopped: '已停止',
-  idle: '空闲',
-  uninitialized: '未初始化',
-  stale: '疑似中断',
-}
 const LOOP_COLOR: Record<string, string> = {
   running: 'claude',
   waiting: 'success',
@@ -119,19 +156,18 @@ function signatureOf(root: string | null, files: PoolFiles): string {
 }
 
 function statusLine(snap: Snapshot, now: number): string | undefined {
+  const loopText = L.loop[snap.loop]
   if (!snap.initialized) return undefined
   const c = snap.counts
   const cur = snap.current
-  const parts = [`任务流水线 ● ${LOOP_TEXT[snap.loop]}`]
+  const parts = [`${L.title} ● ${loopText}`]
   if (cur) {
     const title = snap.currentTitle.length > 24 ? `${snap.currentTitle.slice(0, 24)}…` : snap.currentTitle
     parts.push(`${cur.task} ${title}`.trim())
     if (cur.started !== null) parts.push(duration(now - cur.started))
   }
-  if (c['待验证']) parts.push(`待验证 ${c['待验证']}`)
-  if (c['待决策']) parts.push(`待决策 ${c['待决策']}`)
-  if (c['阻塞']) parts.push(`阻塞 ${c['阻塞']}`)
-  if (!cur && c['待开始']) parts.push(`待开始 ${c['待开始']}`)
+  for (const status of ['待验证', '待决策', '阻塞']) if (c[status]) parts.push(L.countOf(status, c[status]!))
+  if (!cur && c['待开始']) parts.push(L.countOf('待开始', c['待开始']))
   parts.push('/task-dash')
   return parts.join(' · ')
 }
@@ -142,6 +178,7 @@ let lastSignature = ''
 let lastStatus: string | undefined
 
 async function showStatus($: EngineInterface, snap: Snapshot | null, now: number) {
+  await currentStrings($)
   const text = snap && !(await read($, statusHidden)) ? statusLine(snap, now) : undefined
   if (text !== lastStatus) {
     lastStatus = text
@@ -159,7 +196,8 @@ async function readOnce($: EngineInterface) {
   let snap = prev
   if (signature !== lastSignature || !prev) {
     snap = buildSnapshot(root, files, now)
-    for (const note of transitions(prev, snap)) $.ui.toast(`任务流水线：${note}`)
+    const strings = await currentStrings($)
+    for (const note of transitions(prev, snap)) $.ui.toast(strings.toast(note))
     await update($, snapshot, () => snap)
     lastSignature = signature
   }
@@ -179,7 +217,7 @@ let generation = 0
 function refresh($: EngineInterface): Promise<void> {
   if (refreshing && Date.now() - refreshStartedAt > READ_TIMEOUT_MS) {
     refreshing = null
-    void update($, lastError, () => `读取任务池超时（>${READ_TIMEOUT_MS / 1000}s），已放弃本次读取`)
+    void update($, lastError, () => L.readTimeout(READ_TIMEOUT_MS / 1000))
   }
   if (refreshing) {
     again = true
@@ -249,16 +287,16 @@ function CurrentCard({ els, snap, now }: { els: Els; snap: Snapshot; now: number
   if (!cur) {
     return (
       <Box flexDirection="column">
-        <Text dimColor>当前没有执行中的任务</Text>
-        {snap.inbox ? <Text dimColor>inbox 待合并 {snap.inbox} 条</Text> : null}
+        <Text dimColor>{L.noCurrent}</Text>
+        {snap.inbox ? <Text dimColor>{L.inboxPending(snap.inbox)}</Text> : null}
       </Box>
     )
   }
   const meta = [
-    `阶段 ${cur.phase || '—'}`,
+    L.phase(cur.phase || '—'),
     cur.worker || null,
-    `已运行 ${duration(cur.started === null ? null : now - cur.started)}`,
-    cur.startSha ? `基线 ${cur.startSha.slice(0, 8)}` : null,
+    L.elapsed(duration(cur.started === null ? null : now - cur.started)),
+    cur.startSha ? L.baseline(cur.startSha.slice(0, 8)) : null,
     snap.inbox ? `inbox ${snap.inbox}` : null,
   ].filter(Boolean)
   return (
@@ -268,13 +306,13 @@ function CurrentCard({ els, snap, now }: { els: Els; snap: Snapshot; now: number
           {cur.task}{' '}
         </Text>
         <Box flexGrow={1} flexShrink={1} minWidth={0}>
-          <Text wrap="truncate-end">{snap.currentTitle || '（backlog 中未找到标题）'}</Text>
+          <Text wrap="truncate-end">{snap.currentTitle || L.noTitle}</Text>
         </Box>
       </Box>
       <Text dimColor wrap="wrap">
         {meta.join(' · ')}
       </Text>
-      {cur.haltNote ? <Text color="error" wrap="wrap">断点：{cur.haltNote}</Text> : null}
+      {cur.haltNote ? <Text color="error" wrap="wrap">{L.halt(cur.haltNote)}</Text> : null}
     </Box>
   )
 }
@@ -283,8 +321,8 @@ function taskRow($: EngineInterface, els: Els, task: Task, isOpen: boolean, isCu
   const { Box, Text, Button } = els
   const meta = [
     task.module || '—',
-    task.deps && task.deps !== '—' ? `依赖 ${task.deps}` : null,
-    task.derivedFrom ? `衍生自 ${task.derivedFrom}` : null,
+    task.deps && task.deps !== '—' ? L.deps(task.deps) : null,
+    task.derivedFrom ? L.derivedFrom(task.derivedFrom) : null,
   ].filter(Boolean)
   return (
     <Box key={`row:${task.id}`} flexDirection="column">
@@ -302,16 +340,16 @@ function taskRow($: EngineInterface, els: Els, task: Task, isOpen: boolean, isCu
             {task.title}
           </Text>
         </Box>
-        <Text color={STATUS_COLOR[task.status] ?? 'subtle'}> {task.statusLabel || task.status}</Text>
+        <Text color={STATUS_COLOR[task.status] ?? 'subtle'}> {statusLabel(L, task.status, task.statusLabel)}</Text>
       </Box>
       {isOpen ? (
         <Box flexDirection="column" paddingLeft={4} marginBottom={1}>
           <Text dimColor wrap="wrap">
             {meta.join(' · ')}
           </Text>
-          {task.acceptance ? <Text wrap="wrap">验收：{task.acceptance}</Text> : null}
+          {task.acceptance ? <Text wrap="wrap">{L.acceptance(task.acceptance)}</Text> : null}
           <Text dimColor wrap="wrap">
-            {task.note || '无备注'}
+            {task.note || L.noNote}
           </Text>
         </Box>
       ) : null}
@@ -331,7 +369,7 @@ function AgentLine({ els, agent, now }: { els: Els; agent: AgentRow; now: number
       </Box>
       <Text dimColor>
         {' '}
-        {agent.type} · {running ? '运行中' : '已结束'} {duration(took)}
+        {agent.type} · {running ? L.agentRunning : L.agentDone} {duration(took)}
       </Text>
     </Box>
   )
@@ -339,22 +377,23 @@ function AgentLine({ els, agent, now }: { els: Els; agent: AgentRow; now: number
 
 async function drawPane($: EngineInterface, els: Els, cols: number) {
   const { Box, Text, Button } = els
+  await currentStrings($)
   const snap = await read($, snapshot)
   const err = await read($, lastError)
   const header = (
     <Box>
       <Box flexGrow={1}>
-        <Text bold>{PANE_TITLE} </Text>
+        <Text bold>{L.title} </Text>
         {snap?.root ? <Text dimColor>[{snap.root.split(/[\\/]/).filter(Boolean).pop() ?? snap.root}] </Text> : null}
         {snap ? (
           <Text color={LOOP_COLOR[snap.loop] ?? 'subtle'}>
-            ● {LOOP_TEXT[snap.loop]}
-            {snap.stopRequested && snap.loop === 'running' ? '（本任务后停机）' : ''}
-            {snap.loop === 'stale' ? '（调度会话可能已退出，说「继续」或 /task-loop 恢复）' : ''}
+            ● {L.loop[snap.loop]}
+            {snap.stopRequested && snap.loop === 'running' ? L.stopAfter : ''}
+            {snap.loop === 'stale' ? L.staleHint : ''}
           </Text>
         ) : null}
       </Box>
-      <Button key="refresh" hotkey="r" label="刷新" onPress={() => refresh($)} />
+      <Button key="refresh" hotkey="r" label={L.refresh} onPress={() => refresh($)} />
     </Box>
   )
 
@@ -362,7 +401,7 @@ async function drawPane($: EngineInterface, els: Els, cols: number) {
     return (
       <Box flexDirection="column" width={cols}>
         {header}
-        <Text dimColor>加载任务池…</Text>
+        <Text dimColor>{L.loading}</Text>
       </Box>
     )
   }
@@ -371,8 +410,8 @@ async function drawPane($: EngineInterface, els: Els, cols: number) {
       <Box flexDirection="column" width={cols}>
         {header}
         {err ? <Text color="error">{err}</Text> : null}
-        <Text dimColor>当前工作区（及上级目录）没有 .claude/backlog.md。</Text>
-        <Text dimColor>运行 /task-init 初始化任务池。</Text>
+        <Text dimColor>{L.noPool}</Text>
+        <Text dimColor>{L.runInit}</Text>
       </Box>
     )
   }
@@ -386,9 +425,9 @@ async function drawPane($: EngineInterface, els: Els, cols: number) {
   const shown = snap.tasks.filter(active.match)
   const sessionText = s
     ? [
-        s.max !== null ? `已交付 ${s.done}/${s.max}` : `已交付 ${s.done}`,
-        s.runStarted !== null ? `已运行 ${duration(now - s.runStarted)}${s.hours !== null ? `/${s.hours}h` : ''}` : null,
-        s.noprog ? `无进展 ${s.noprog}` : null,
+        L.delivered(s.done, s.max),
+        s.runStarted !== null ? L.elapsed(`${duration(now - s.runStarted)}${s.hours !== null ? `/${s.hours}h` : ''}`) : null,
+        s.noprog ? L.noprog(s.noprog) : null,
       ]
         .filter(Boolean)
         .join(' · ')
@@ -404,29 +443,29 @@ async function drawPane($: EngineInterface, els: Els, cols: number) {
       {err ? <Text color="error">{err}</Text> : null}
       <Rule els={els} cols={cols} />
 
-      <Heading els={els} title="当前任务" />
+      <Heading els={els} title={L.currentTask} />
       <CurrentCard els={els} snap={snap} now={now} />
       <Rule els={els} cols={cols} />
 
       <Box flexWrap="wrap">
-        <Stat els={els} label="完成率" value={percent(m.completionRate)} color="success" />
-        <Stat els={els} label="交付率" value={percent(m.deliveryRate)} color="claude" />
-        <Stat els={els} label="一次通过" value={percent(m.firstPassRate)} color={m.firstPassRate === null ? undefined : 'success'} />
-        <Stat els={els} label="7日交付" value={`${m.delivered7d}`} color="claude" />
-        <Stat els={els} label="中位周期" value={duration(m.medianCycleMs)} />
-        <Stat els={els} label="WIP" value={`${c['进行中'] ?? 0}`} color={(c['进行中'] ?? 0) > 1 ? 'error' : 'success'} />
-        <Stat els={els} label="待验证" value={`${c['待验证'] ?? 0}`} color={c['待验证'] ? 'warning' : undefined} />
-        <Stat els={els} label="已归档" value={`${c.archived}`} />
+        <Stat els={els} label={L.stats.completion} value={percent(m.completionRate)} color="success" />
+        <Stat els={els} label={L.stats.delivery} value={percent(m.deliveryRate)} color="claude" />
+        <Stat els={els} label={L.stats.firstPass} value={percent(m.firstPassRate)} color={m.firstPassRate === null ? undefined : 'success'} />
+        <Stat els={els} label={L.stats.delivered7d} value={`${m.delivered7d}`} color="claude" />
+        <Stat els={els} label={L.stats.medianCycle} value={duration(m.medianCycleMs)} />
+        <Stat els={els} label={L.stats.wip} value={`${c['进行中'] ?? 0}`} color={(c['进行中'] ?? 0) > 1 ? 'error' : 'success'} />
+        <Stat els={els} label={L.stats.verify} value={`${c['待验证'] ?? 0}`} color={c['待验证'] ? 'warning' : undefined} />
+        <Stat els={els} label={L.stats.archived} value={`${c.archived}`} />
       </Box>
       <Rule els={els} cols={cols} />
 
-      <Heading els={els} title="任务" extra={`${shown.length} 条`} />
+      <Heading els={els} title={L.tasks} extra={L.count(shown.length)} />
       <Box flexWrap="wrap">
         {FILTERS.map(f => (
           <Box key={`filter-box:${f.key}`} marginRight={1}>
             <Button
               key={`filter:${f.key}`}
-              label={`${f.label} ${snap.tasks.filter(f.match).length}`}
+              label={`${L.filters[f.key]} ${snap.tasks.filter(f.match).length}`}
               variant={f.key === active.key ? 'primary' : undefined}
               onPress={() => update($, filter, () => f.key)}
             />
@@ -436,13 +475,13 @@ async function drawPane($: EngineInterface, els: Els, cols: number) {
       {shown.length ? (
         shown.map(t => taskRow($, els, t, opened === t.id, snap.current?.task === t.id))
       ) : (
-        <Text dimColor>这个筛选下没有任务。</Text>
+        <Text dimColor>{L.noneInFilter}</Text>
       )}
 
       {snap.decisions.length ? (
         <Box flexDirection="column">
           <Rule els={els} cols={cols} />
-          <Heading els={els} title="待决策" extra={`${snap.decisions.length} 条 · 在会话里说「T-0NN 选 A」答复`} />
+          <Heading els={els} title={L.decisions} extra={L.decisionsExtra(snap.decisions.length)} />
           {snap.decisions.map((d, i) => (
             <Box key={`decision:${d.task}:${i}`} flexDirection="column" marginBottom={1}>
               <Text wrap="wrap">
@@ -459,7 +498,7 @@ async function drawPane($: EngineInterface, els: Els, cols: number) {
       {snap.humanBlocks.filter(b => !/已解决|已完成|关闭/.test(b.status)).length ? (
         <Box flexDirection="column">
           <Rule els={els} cols={cols} />
-          <Heading els={els} title="人工阻塞" />
+          <Heading els={els} title={L.humanBlocks} />
           {snap.humanBlocks
             .filter(b => !/已解决|已完成|关闭/.test(b.status))
             .map((b, i) => (
@@ -473,7 +512,7 @@ async function drawPane($: EngineInterface, els: Els, cols: number) {
       ) : null}
 
       <Rule els={els} cols={cols} />
-      <Heading els={els} title="Agent" extra={`${agentList.filter(a => a.status === 'running').length} 运行中`} />
+      <Heading els={els} title={L.agents} extra={L.runningCount(agentList.filter(a => a.status === 'running').length)} />
       {agentList.length ? (
         [...agentList].reverse().map(a => (
             <Box key={`agent:${a.id}`}>
@@ -481,11 +520,11 @@ async function drawPane($: EngineInterface, els: Els, cols: number) {
             </Box>
           ))
       ) : (
-        <Text dimColor>本会话还没有派发子 agent。/task-loop 派 worker 后会出现在这里。</Text>
+        <Text dimColor>{L.noAgents}</Text>
       )}
 
       <Rule els={els} cols={cols} />
-      <Heading els={els} title="最近流水" extra={`${snap.events.length} 条`} />
+      <Heading els={els} title={L.events} extra={L.count(snap.events.length)} />
       {snap.events.length ? (
         [...snap.events]
           .slice(-12)
@@ -502,20 +541,21 @@ async function drawPane($: EngineInterface, els: Els, cols: number) {
             </Box>
           ))
       ) : (
-        <Text dimColor>还没有运行记录。</Text>
+        <Text dimColor>{L.noEvents}</Text>
       )}
-      <Text dimColor>只读 · 每 {REFRESH_MS / 1000}s 刷新 · 数据来自 .claude/backlog.md 与 .claude/auto/</Text>
+      <Text dimColor>{L.footer(REFRESH_MS / 1000)}</Text>
     </Box>
   )
 }
 
 // ---------------------------------------------------------------- hooks
 
-export const register: Register = on => {
+export const register: Register = (on, options) => {
   on('session.start', async ($, e, next) => {
+    await ensureLang($, options, true)
     await $.command.register({
       name: 'task-dash',
-      description: '打开任务流水线面板（右侧停靠）；off / on 隐藏或恢复输入框下方的状态行；inline 强制内嵌',
+      description: L.cmdDescription,
       argumentHint: '[inline|off|on]',
     })
     $.clock.every(REFRESH_MS, () => void refresh($))
@@ -525,24 +565,23 @@ export const register: Register = on => {
 
   on('command.run', { command: 'task-dash' }, async ($, e) => {
     const arg = e.args.trim()
+    await ensureLang($, options)
     if (arg === 'off' || arg === 'on') {
       await update($, statusHidden, () => arg === 'off')
       lastStatus = '\u0000'
       await showStatus($, await read($, snapshot), await $.clock.now())
-      return { text: arg === 'off' ? '已隐藏输入框下方的任务流水线状态行。' : '已恢复输入框下方的任务流水线状态行。' }
+      return { text: arg === 'off' ? L.statusOff : L.statusOn }
     }
     await refresh($)
     const canDock = e.presentation.isFullscreen && e.presentation.columns >= DOCK_MIN_COLUMNS
     if (!canDock && arg !== 'inline') {
       const why = e.presentation.isFullscreen
-        ? `终端只有 ${e.presentation.columns} 列，停靠到右侧至少需要 ${DOCK_MIN_COLUMNS} 列`
-        : '当前不是全屏布局，面板只能内嵌在输入框上方，会挡住输出'
-      return {
-        text: `${why}，所以没有打开面板。摘要已显示在输入框下方的状态行。\n要右侧停靠：用全屏布局启动（CLAUDE_CODE_NO_FLICKER=1 claude，tmux 里默认不是全屏）并把终端拉宽；仍想内嵌就用 /task-dash inline。`,
-      }
+        ? L.narrow(e.presentation.columns, DOCK_MIN_COLUMNS)
+        : L.notFullscreen
+      return { text: L.notOpened(why) }
     }
-    await $.ui.open({ id: PANE, title: PANE_TITLE, focus: true })
-    return { text: canDock ? '任务流水线面板已在右侧打开（Esc 或 ctrl+x x 关闭）。' : '任务流水线面板已内嵌打开。' }
+    await $.ui.open({ id: PANE, title: L.title, focus: true })
+    return { text: canDock ? L.openedDock : L.openedInline }
   })
 
   on('turn.complete', async ($, e, next) => {

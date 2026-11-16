@@ -97,7 +97,7 @@ export type AgentRow = {
 
 declare module 'claude-code' {
   interface PluginState {
-    'task-dash': {
+    task: {
       snapshot: Snapshot | null
       filter: string
       openTask: string | null
@@ -105,6 +105,7 @@ declare module 'claude-code' {
       statusHidden: boolean
       now: number
       error: string | null
+      lang: 'zh' | 'en' | null
     }
   }
 }

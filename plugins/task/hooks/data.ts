@@ -18,6 +18,7 @@ import type {
   Snapshot,
   Task,
 } from '../types'
+import type { Transition } from './i18n'
 
 export const STATUS_ORDER = ['进行中', '打回', '待决策', '阻塞', '待验证', '待开始', '已完成', '已取消'] as const
 
@@ -373,18 +374,18 @@ export function buildSnapshot(root: string | null, files: PoolFiles, now: number
 }
 
 /** Status changes worth a toast between two snapshots: entering 待验证 / 待决策 / 阻塞. */
-export function transitions(prev: Snapshot | null, next: Snapshot): string[] {
+export function transitions(prev: Snapshot | null, next: Snapshot): Transition[] {
   if (!prev || !prev.initialized || prev.root !== next.root) return []
   // A duplicated id keeps its first row on both sides, so one stray row cannot toast on every edit.
   const firstRows = (tasks: Task[]) => [...new Map([...tasks].reverse().map(t => [t.id, t] as const)).values()]
   const before = new Map(firstRows(prev.tasks).map(t => [t.id, t.status]))
-  const notes: string[] = []
+  const notes: Transition[] = []
   for (const t of firstRows(next.tasks)) {
     const was = before.get(t.id)
     if (was === t.status) continue
     // A task added straight into 待决策 / 阻塞 needs attention as much as one moving there.
     const watched = was === undefined ? t.status === '待决策' || t.status === '阻塞' : t.status === '待验证' || t.status === '待决策' || t.status === '阻塞'
-    if (watched) notes.push(`${t.id} ${was === undefined ? '新录入' : '→'} ${t.status}：${t.title.slice(0, 40)}`)
+    if (watched) notes.push({ id: t.id, kind: was === undefined ? 'new' : 'move', status: t.status, title: t.title })
   }
   return notes
 }

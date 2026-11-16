@@ -1,0 +1,32 @@
+{
+  "name": "task",
+  "version": "0.2.0",
+  "description": "异步任务流水线：task:* 技能（init/add/next/loop/auto/status）维护 .claude/backlog.md 任务池，配右侧面板与状态行实时展示进度",
+  "types": "./types/index.d.ts",
+  "author": {
+    "name": "qiqll"
+  },
+  "license": "MIT",
+  "repository": "https://github.com/qiqll/claude-task",
+  "keywords": [
+    "task",
+    "backlog",
+    "workflow",
+    "agent-loop",
+    "dashboard",
+    "pane"
+  ],
+  "userConfig": {
+    "language": {
+      "type": "string",
+      "title": "Language / 界面语言",
+      "description": "auto follows the OS language (macOS system language, then LC_ALL / LANG) · auto 跟随系统语言",
+      "options": [
+        "auto",
+        "zh",
+        "en"
+      ],
+      "default": "auto"
+    }
+  }
+}
