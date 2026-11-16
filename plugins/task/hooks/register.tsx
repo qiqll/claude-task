@@ -189,6 +189,71 @@ function statusLine(snap: Snapshot, now: number): string | undefined {
   return parts.join(' · ')
 }
 
+const REPORT_TASKS = 15
+
+/** The whole dashboard as plain text: printed into the transcript where no pane can dock. */
+function reportText(snap: Snapshot, agentList: AgentRow[], now: number, all: boolean): string {
+  if (!snap.initialized) return `${L.title}\n${L.noPool}\n${L.runInit}`
+  const out: string[] = []
+  const name = snap.root?.split(/[\\/]/).filter(Boolean).pop() ?? ''
+  const s = snap.session
+  const session = s
+    ? [L.delivered(s.done, s.max), s.runStarted !== null ? L.elapsed(`${duration(now - s.runStarted)}${s.hours !== null ? `/${s.hours}h` : ''}`) : null, s.noprog ? L.noprog(s.noprog) : null]
+        .filter(Boolean)
+        .join(' · ')
+    : ''
+  out.push(`${L.title} [${name}] ● ${L.loop[snap.loop]}${snap.stopRequested && snap.loop === 'running' ? L.stopAfter : ''}${snap.loop === 'stale' ? L.staleHint : ''}`)
+  if (session) out.push(session)
+  const cur = snap.current
+  out.push('', `■ ${L.currentTask}`)
+  if (cur) {
+    out.push(`  ${cur.task} ${snap.currentTitle || L.noTitle}`)
+    out.push(`  ${[L.phase(cur.phase || '—'), cur.worker || null, L.elapsed(duration(cur.started === null ? null : now - cur.started)), cur.startSha ? L.baseline(cur.startSha.slice(0, 8)) : null].filter(Boolean).join(' · ')}`)
+    if (cur.haltNote) out.push(`  ${L.halt(cur.haltNote)}`)
+  } else out.push(`  ${L.noCurrent}`)
+  if (snap.inbox) out.push(`  ${L.inboxPending(snap.inbox)}`)
+  const m = snap.metrics
+  const c = snap.counts
+  out.push(
+    '',
+    [
+      `${L.stats.completion} ${percent(m.completionRate)}`,
+      `${L.stats.delivery} ${percent(m.deliveryRate)}`,
+      `${L.stats.firstPass} ${percent(m.firstPassRate)}`,
+      `${L.stats.delivered7d} ${m.delivered7d}`,
+      `${L.stats.medianCycle} ${duration(m.medianCycleMs)}`,
+      `${L.stats.wip} ${c['进行中'] ?? 0}`,
+      `${L.stats.verify} ${c['待验证'] ?? 0}`,
+      `${L.stats.archived} ${c.archived}`,
+    ].join(' · '),
+  )
+  const open = snap.tasks.filter(t => t.status !== '已完成' && t.status !== '已取消')
+  const order = (t: Task) => { const i = ['进行中', '打回', '待决策', '阻塞', '待验证', '待开始'].indexOf(t.status); return i < 0 ? 9 : i }
+  const tasks = [...open].sort((a, b) => order(a) - order(b))
+  const shown = all ? tasks : tasks.slice(0, REPORT_TASKS)
+  out.push('', `■ ${L.tasks} ${L.count(open.length)}`)
+  for (const t of shown) out.push(`  ${t.priority || '—'} ${t.id} [${statusLabel(L, t.status, t.statusLabel)}] ${t.title}${t.deps && t.deps !== '—' ? `  (${L.deps(t.deps)})` : ''}`)
+  if (shown.length < tasks.length) out.push(`  ${L.more(tasks.length - shown.length)}`)
+  if (snap.decisions.length) {
+    out.push('', `■ ${L.decisions} ${L.decisionsExtra(snap.decisions.length)}`)
+    for (const d of snap.decisions) out.push(`  ${d.task} ${d.question}`, `      ${d.options}`)
+  }
+  const blocks = snap.humanBlocks.filter(b => !/已解决|已完成|关闭/.test(b.status))
+  if (blocks.length) {
+    out.push('', `■ ${L.humanBlocks}`)
+    for (const b of blocks) out.push(`  ${b.id} ${b.desc} → ${b.blocks}`)
+  }
+  if (agentList.length) {
+    out.push('', `■ ${L.agents} ${L.runningCount(agentList.filter(a => a.status === 'running').length)}`)
+    for (const a of [...agentList].reverse().slice(0, 8)) out.push(`  ${a.status === 'running' ? '●' : '○'} ${a.label} · ${a.status === 'running' ? L.agentRunning : L.agentDone} ${duration((a.endedAt ?? now) - a.startedAt)}`)
+  }
+  if (snap.events.length) {
+    out.push('', `■ ${L.events}`)
+    for (const e of [...snap.events].slice(-8).reverse()) out.push(`  ${e.time.slice(5, 16)} ${e.subject} ${e.subject === e.event ? e.detail : `${e.event} ${e.detail}`}`)
+  }
+  return out.join('\n')
+}
+
 let refreshing: Promise<void> | null = null
 let again = false
 let lastSignature = ''
@@ -573,7 +638,7 @@ export const register: Register = (on, options) => {
     await $.command.register({
       name: 'task-dash',
       description: L.cmdDescription,
-      argumentHint: '[inline|off|on]',
+      argumentHint: '[report [all]|inline|off|on]',
     })
     $.clock.every(REFRESH_MS, () => void refresh($))
     void refresh($)
@@ -590,12 +655,16 @@ export const register: Register = (on, options) => {
       return { text: arg === 'off' ? L.statusOff : L.statusOn }
     }
     await refresh($)
+    const printReport = async (all: boolean) => {
+      await currentStrings($)
+      const snap = await read($, snapshot)
+      return snap ? reportText(snap, await read($, agents), await $.clock.now(), all) : L.loading
+    }
+    if (arg === 'report' || arg === 'report all') return { text: await printReport(arg === 'report all') }
     const canDock = e.presentation.isFullscreen && e.presentation.columns >= DOCK_MIN_COLUMNS
     if (!canDock && arg !== 'inline') {
-      const why = e.presentation.isFullscreen
-        ? L.narrow(e.presentation.columns, DOCK_MIN_COLUMNS)
-        : L.notFullscreen
-      return { text: L.notOpened(why) }
+      // No dock: print the whole dashboard into the transcript instead of covering it.
+      return { text: `${await printReport(false)}\n\n${L.reportHint}` }
     }
     await $.ui.open({ id: PANE, title: L.title, focus: true })
     return { text: canDock ? L.openedDock : L.openedInline }

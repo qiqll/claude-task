@@ -59,6 +59,7 @@
 | T-004 | task-dash 打包为 marketplace 并迁到 smart_plugin/claudecode | task-dash/发布 | 待验证 | T-001, T-002 | 从 dev-mods 迁入当前目录，补 marketplace.json、README（安装：/plugin install task-dash --marketplace <owner>/<repo>）。验收：本机 `claude plugin marketplace add <dir>` 后可安装并加载；**需求方决策（2026-11-16）：选 B，git init 并新建 GitHub 公开仓库发布**（仓库名/账号推送前再确认）；**交付（2026-11-16）**：仓库 qiqll/claude-task-dash（公开），marketplace 在根目录、插件在 plugins/task-dash，提交作者用 GitHub noreply 邮箱；门禁 code-reviewer 0C/0H/1M/6L，M（README 未说明 task-* 技能依赖）已改为写明依赖 + 最小任务池格式，L 全修（快捷键、状态行示例、疑似中断口径、.gitignore、安装后新会话生效）。待需求方实际安装验证 |
 | T-005 | task-* 技能与面板合并为一个 task 插件发布 | task-dash/发布 | 待验证 | T-004 | 面板依赖 task-* 技能生成的文件，但技能只在需求方本机 ~/.claude/skills/。验收：别人装完能用 /task-init 建池。来源：衍生自 T-004（第 1 层）；衍生层级：1；**需求方决策（2026-11-16）：技能与 UI 合成一个完整的 task 插件，不分库**；**交付（2026-11-16）**：插件改名 `task`（plugins/task，v0.2.0），6 个技能迁入 skills/（命令 /task:init|add|next|loop|auto|status），模板与 loop 脚本路径改为 `${CLAUDE_PLUGIN_ROOT}`，qtask 随插件 bin/；去掉对全局 CLAUDE.md 的依赖（门禁内联、缺专业 agent 时降级 general-purpose）；仓库改名 qiqll/claude-task。验证：validate、23 tests、tsc 通过 |
 | T-006 | 面板/状态行/提醒的界面语言跟随操作系统语言（中/英） | task/UI | 待验证 | T-005 | 判定顺序：插件设置 language（auto/zh/en）> macOS AppleLanguages > LC_ALL/LC_MESSAGES/LANG > Intl；zh* → 中文，其余英文。backlog 数据（标题/状态原文）不翻译，只译界面文字与状态标签。注意需求方本机 LANG=en_US 而系统为 zh-Hans，须以系统语言为准。验收：中/英两套 UI 用例在 terminal/desktop 通过；本机显示中文。来源：需求方 2026-11-16 口述；**交付（2026-11-16）**：新增 hooks/i18n.ts（中英两表 + pickLang），userConfig `language`（auto/zh/en）；状态标签翻译、后缀保留；本机实测 system=zh-Hans-CN、LANG=en_US → 中文。用例：判定顺序 5 条 + 英文 UI（terminal/desktop）+ 设置覆盖 |
+| T-007 | 非全屏下 /task-dash 输出完整文字快照 | task/UI | 待验证 | — | 状态行只有一行；非全屏时 /task-dash 改为把完整仪表盘作为命令输出打进对话（不遮挡、不耗模型 token），`report [all]` 显式输出。验收：非全屏敲 /task-dash 能看到当前任务、指标、任务列表、待决策、人工阻塞、流水。来源：需求方 2026-11-16 口述 |
 
 ## P3 — 想法池
 
@@ -91,5 +92,5 @@
 ## ID 分配规则
 
 - 格式 `T-NNN`，三位数字，全局递增，**永不复用**（即使任务取消）
-- 下一个可用 ID：**T-007**（AI 录入后须更新此行）
+- 下一个可用 ID：**T-008**（AI 录入后须更新此行）
 - 人工阻塞事项用 `H-NNN`，下一个可用：**H-002**

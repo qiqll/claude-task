@@ -103,7 +103,7 @@ const zh = {
   readTimeout: (sec: number) => `读取任务池超时（>${sec}s），已放弃本次读取`,
   toast: (t: Transition) => `任务流水线：${t.id} ${t.kind === 'new' ? '新录入' : '→'} ${t.status}：${t.title.slice(0, 40)}`,
   countOf: (status: string, n: number) => `${status} ${n}`,
-  cmdDescription: '打开任务流水线面板（右侧停靠）；off / on 隐藏或恢复输入框下方的状态行；inline 强制内嵌',
+  cmdDescription: '任务流水线：全屏时右侧面板，否则输出完整快照；report [all] 只输出快照；inline 强制内嵌；off / on 隐藏或恢复状态行',
   statusOff: '已隐藏输入框下方的任务流水线状态行。',
   statusOn: '已恢复输入框下方的任务流水线状态行。',
   narrow: (cols: number, min: number) => `终端只有 ${cols} 列，停靠到右侧至少需要 ${min} 列`,
@@ -112,6 +112,8 @@ const zh = {
     `${why}，所以没有打开面板。摘要已显示在输入框下方的状态行。\n要右侧停靠：用全屏布局启动（CLAUDE_CODE_NO_FLICKER=1 claude，tmux 里默认不是全屏）并把终端拉宽；仍想内嵌就用 /task-dash inline。`,
   openedDock: '任务流水线面板已在右侧打开（Esc 或 ctrl+x x 关闭）。',
   openedInline: '任务流水线面板已内嵌打开。',
+  reportHint: '（非全屏：以上为一次性快照，随对话滚动；全屏布局下 /task-dash 停靠右侧，/task-dash inline 临时内嵌面板）',
+  more: (n: number) => `… 另有 ${n} 条，/task-dash report all 查看全部`,
 }
 
 export type Strings = typeof zh
@@ -176,7 +178,7 @@ const en: Strings = {
   readTimeout: sec => `Reading the task pool timed out (>${sec}s); this read was dropped`,
   toast: t => `Task Pipeline: ${t.id} ${t.kind === 'new' ? 'added as' : '→'} ${STATUS_EN[t.status] ?? t.status}: ${t.title.slice(0, 40)}`,
   countOf: (status, n) => `${STATUS_EN[status] ?? status} ${n}`,
-  cmdDescription: 'Open the task pipeline pane (docked right); off / on hides or restores the status line; inline forces an inline pane',
+  cmdDescription: 'Task pipeline: docked pane in fullscreen, otherwise a full snapshot; report [all] prints the snapshot; inline forces an inline pane; off / on hides or restores the status line',
   statusOff: 'Task pipeline status line hidden.',
   statusOn: 'Task pipeline status line restored.',
   narrow: (cols, min) => `The terminal is ${cols} columns wide; docking needs at least ${min}`,
@@ -185,6 +187,8 @@ const en: Strings = {
     `${why}, so the pane was not opened. The summary is in the status line under the prompt.\nTo dock it on the right, start in the fullscreen layout (CLAUDE_CODE_NO_FLICKER=1 claude; tmux is not fullscreen by default) and widen the terminal; use /task-dash inline to open it inline anyway.`,
   openedDock: 'Task pipeline pane opened on the right (Esc or ctrl+x x closes it).',
   openedInline: 'Task pipeline pane opened inline.',
+  reportHint: '(Not fullscreen: this is a one-off snapshot that scrolls with the chat; in the fullscreen layout /task-dash docks on the right, /task-dash inline opens a temporary inline pane)',
+  more: n => `… ${n} more, /task-dash report all shows everything`,
 }
 
 export const STRINGS: Record<Lang, Strings> = { zh, en }

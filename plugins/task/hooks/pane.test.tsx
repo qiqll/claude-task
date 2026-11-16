@@ -103,7 +103,12 @@ test('without a dock the command does not open an inline pane over the transcrip
     return { value: { isPlaced: true as const } }
   })
   const narrow = await $.command.run({ ...RUN, presentation: { isFullscreen: false, columns: 200 } })
-  expect(narrow).toMatchObject({ text: expect.stringContaining('没有打开面板') })
+  // Without a dock the whole dashboard is printed into the transcript.
+  expect(narrow).toMatchObject({ text: expect.stringContaining('■ 当前任务') })
+  expect(narrow?.text).toContain('T-071 人工放行池管理')
+  expect(narrow?.text).toContain('超限怎么处理')
+  expect(narrow?.text).toContain('想法')
+  expect(narrow?.text).toContain('一次性快照')
   expect(opened).toEqual([])
   await $.command.run({ ...RUN, args: 'inline', presentation: { isFullscreen: false, columns: 200 } })
   expect(opened).toEqual(['task-dash'])

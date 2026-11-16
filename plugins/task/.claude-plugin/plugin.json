@@ -1,6 +1,6 @@
 {
   "name": "task",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "异步任务流水线：task:* 技能（init/add/next/loop/auto/status）维护 .claude/backlog.md 任务池，配右侧面板与状态行实时展示进度",
   "types": "./types/index.d.ts",
   "author": {
