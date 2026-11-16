@@ -48,18 +48,13 @@
 
 | ID | 任务 | 模块 | 状态 | 依赖 | 备注 |
 |----|------|------|------|------|------|
-| T-001 | task-dash 摘要移到输入框下方状态行，/task-dash 仅在可右侧停靠时打开面板 | task-dash/UI | 待验证 | — | 删除 AbovePrompt 横条，改 `$.ui.status`；非全屏或 <110 列不开内嵌面板并给出开启全屏的提示，`/task-dash inline` 强制内嵌，`off/on` 隐藏/恢复状态行。验收：输出区不再被遮挡，状态行显示当前任务/待验证/待决策；全屏宽终端下面板停靠右侧。来源：需求方 2026-11-16 口述 |
-| T-002 | task-dash code-review High/Medium 修复 | task-dash/数据 | 待验证 | — | H1 Agent 标签改用 `$.agent.list` + description→name 映射（去 FIFO）；H2 新增「疑似中断」状态（3h 无活动或超时长预算）；M1 内容签名不变不重写快照、root 按 cwd 缓存、note 截到 400 字；M2 读取超时看门狗 + 读取中再请求补跑；M3 归档按 id 去重并排除重开任务；M4 一次通过率按任务计；M5 新增交付率（含待验证）。顺带 L1–L4。验收：`claude plugin test` 15 pass、tsc、validate 通过。来源：code-reviewer 审查 2026-11-16 |
+| — | 暂无 | | | | |
 
 ## P2 — 增强 / 技术债
 
 | ID | 任务 | 模块 | 状态 | 依赖 | 备注 |
 |----|------|------|------|------|------|
-| T-003 | task-dash review Low 遗留项 | task-dash/UI | 待验证 | T-002 | L5 新录入即待决策/阻塞也弹 toast；L7 列表元素补 key；L8 面板标题显式显示命中的项目根；L9 splitRow 奇数反引号回退拆分。验收：各补一条用例。来源：衍生自 T-002（第 1 层）；衍生层级：1；**交付（2026-11-16）**：L5/L7/L8/L9 已做，另修 review M×2（重复决策行/人工阻塞行 key 加下标；重复 id 的任务只认首行，避免每次编辑反复弹 toast）与 L（目录名兼容 `\\` 路径）；跳过 L（双反引号代码块切列，backlog 中罕见）。门禁：code-reviewer 0C/0H/2M/2L，M 已修；`claude plugin test` 16 pass、tsc、validate 通过。插件目录非 git，未 commit（随 T-004 入库） |
-| T-004 | task-dash 打包为 marketplace 并迁到 smart_plugin/claudecode | task-dash/发布 | 待验证 | T-001, T-002 | 从 dev-mods 迁入当前目录，补 marketplace.json、README（安装：/plugin install task-dash --marketplace <owner>/<repo>）。验收：本机 `claude plugin marketplace add <dir>` 后可安装并加载；**需求方决策（2026-11-16）：选 B，git init 并新建 GitHub 公开仓库发布**（仓库名/账号推送前再确认）；**交付（2026-11-16）**：仓库 qiqll/claude-task-dash（公开），marketplace 在根目录、插件在 plugins/task-dash，提交作者用 GitHub noreply 邮箱；门禁 code-reviewer 0C/0H/1M/6L，M（README 未说明 task-* 技能依赖）已改为写明依赖 + 最小任务池格式，L 全修（快捷键、状态行示例、疑似中断口径、.gitignore、安装后新会话生效）。待需求方实际安装验证 |
-| T-005 | task-* 技能与面板合并为一个 task 插件发布 | task-dash/发布 | 待验证 | T-004 | 面板依赖 task-* 技能生成的文件，但技能只在需求方本机 ~/.claude/skills/。验收：别人装完能用 /task-init 建池。来源：衍生自 T-004（第 1 层）；衍生层级：1；**需求方决策（2026-11-16）：技能与 UI 合成一个完整的 task 插件，不分库**；**交付（2026-11-16）**：插件改名 `task`（plugins/task，v0.2.0），6 个技能迁入 skills/（命令 /task:init|add|next|loop|auto|status），模板与 loop 脚本路径改为 `${CLAUDE_PLUGIN_ROOT}`，qtask 随插件 bin/；去掉对全局 CLAUDE.md 的依赖（门禁内联、缺专业 agent 时降级 general-purpose）；仓库改名 qiqll/claude-task。验证：validate、23 tests、tsc 通过 |
-| T-006 | 面板/状态行/提醒的界面语言跟随操作系统语言（中/英） | task/UI | 待验证 | T-005 | 判定顺序：插件设置 language（auto/zh/en）> macOS AppleLanguages > LC_ALL/LC_MESSAGES/LANG > Intl；zh* → 中文，其余英文。backlog 数据（标题/状态原文）不翻译，只译界面文字与状态标签。注意需求方本机 LANG=en_US 而系统为 zh-Hans，须以系统语言为准。验收：中/英两套 UI 用例在 terminal/desktop 通过；本机显示中文。来源：需求方 2026-11-16 口述；**交付（2026-11-16）**：新增 hooks/i18n.ts（中英两表 + pickLang），userConfig `language`（auto/zh/en）；状态标签翻译、后缀保留；本机实测 system=zh-Hans-CN、LANG=en_US → 中文。用例：判定顺序 5 条 + 英文 UI（terminal/desktop）+ 设置覆盖 |
-| T-007 | 非全屏下 /task-dash 输出完整文字快照 | task/UI | 待验证 | — | 状态行只有一行；非全屏时 /task-dash 改为把完整仪表盘作为命令输出打进对话（不遮挡、不耗模型 token），`report [all]` 显式输出。验收：非全屏敲 /task-dash 能看到当前任务、指标、任务列表、待决策、人工阻塞、流水。来源：需求方 2026-11-16 口述 |
+| — | 暂无 | | | | |
 
 ## P3 — 想法池
 
@@ -85,7 +80,7 @@
 
 | 编号 | 描述 | 阻塞的任务 | 状态 |
 |------|------|-----------|------|
-| H-001 | 用全屏布局（`CLAUDE_CODE_NO_FLICKER=1 claude`，终端 ≥110 列）重开会话，`/task-dash` 确认面板停靠在右侧 | T-001 | 待处理 |
+| H-001 | 用全屏布局（`CLAUDE_CODE_NO_FLICKER=1 claude`，终端 ≥110 列）重开会话，`/task-dash` 确认面板停靠在右侧 | T-001 | 已解决（2026-11-16 需求方确认右侧停靠正常） |
 
 ---
 
