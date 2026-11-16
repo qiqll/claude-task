@@ -1,6 +1,8 @@
 # task pool runtime state
 .claude/inbox/
 .claude/auto/
+.claude/worktrees/
+.claude/settings.local.json
 # written by the engine beside a loaded mod
 plugins/*/.claude-plugin/types/
 plugins/*/tsconfig.json

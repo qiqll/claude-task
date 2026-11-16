@@ -56,7 +56,8 @@
 | ID | 任务 | 模块 | 状态 | 依赖 | 备注 |
 |----|------|------|------|------|------|
 | T-003 | task-dash review Low 遗留项 | task-dash/UI | 待验证 | T-002 | L5 新录入即待决策/阻塞也弹 toast；L7 列表元素补 key；L8 面板标题显式显示命中的项目根；L9 splitRow 奇数反引号回退拆分。验收：各补一条用例。来源：衍生自 T-002（第 1 层）；衍生层级：1；**交付（2026-11-16）**：L5/L7/L8/L9 已做，另修 review M×2（重复决策行/人工阻塞行 key 加下标；重复 id 的任务只认首行，避免每次编辑反复弹 toast）与 L（目录名兼容 `\\` 路径）；跳过 L（双反引号代码块切列，backlog 中罕见）。门禁：code-reviewer 0C/0H/2M/2L，M 已修；`claude plugin test` 16 pass、tsc、validate 通过。插件目录非 git，未 commit（随 T-004 入库） |
-| T-004 | task-dash 打包为 marketplace 并迁到 smart_plugin/claudecode | task-dash/发布 | 进行中 | T-001, T-002 | 从 dev-mods 迁入当前目录，补 marketplace.json、README（安装：/plugin install task-dash --marketplace <owner>/<repo>）。验收：本机 `claude plugin marketplace add <dir>` 后可安装并加载；**需求方决策（2026-11-16）：选 B，git init 并新建 GitHub 公开仓库发布**（仓库名/账号推送前再确认） |
+| T-004 | task-dash 打包为 marketplace 并迁到 smart_plugin/claudecode | task-dash/发布 | 待验证 | T-001, T-002 | 从 dev-mods 迁入当前目录，补 marketplace.json、README（安装：/plugin install task-dash --marketplace <owner>/<repo>）。验收：本机 `claude plugin marketplace add <dir>` 后可安装并加载；**需求方决策（2026-11-16）：选 B，git init 并新建 GitHub 公开仓库发布**（仓库名/账号推送前再确认）；**交付（2026-11-16）**：仓库 qiqll/claude-task-dash（公开），marketplace 在根目录、插件在 plugins/task-dash，提交作者用 GitHub noreply 邮箱；门禁 code-reviewer 0C/0H/1M/6L，M（README 未说明 task-* 技能依赖）已改为写明依赖 + 最小任务池格式，L 全修（快捷键、状态行示例、疑似中断口径、.gitignore、安装后新会话生效）。待需求方实际安装验证 |
+| T-005 | 是否把 task-* 技能一并公开发布到本仓库 | task-dash/发布 | 待决策 | T-004 | 面板依赖 task-* 技能生成的文件，但技能只在需求方本机 ~/.claude/skills/。验收：别人装完能用 /task-init 建池。来源：衍生自 T-004（第 1 层）；衍生层级：1 |
 
 ## P3 — 想法池
 
@@ -72,7 +73,7 @@
 
 | 任务 | 问题 | 选项（推荐在前） | 挂起时间 |
 |------|------|-----------------|---------|
-| — | 暂无 | | |
+| T-005 | 面板依赖的 task-* 技能未公开，别人装了只能手写 backlog。要不要一起发布？ | A. 打包成同仓库第二个插件 task-skills 公开（推荐，一条命令装齐）；B. 不公开，README 已写明最小格式；C. 放进 task-dash 插件的 skills/ 目录 | 2026-11-16 |
 
 ---
 
@@ -89,5 +90,5 @@
 ## ID 分配规则
 
 - 格式 `T-NNN`，三位数字，全局递增，**永不复用**（即使任务取消）
-- 下一个可用 ID：**T-005**（AI 录入后须更新此行）
+- 下一个可用 ID：**T-006**（AI 录入后须更新此行）
 - 人工阻塞事项用 `H-NNN`，下一个可用：**H-002**
