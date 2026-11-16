@@ -1,0 +1,17 @@
+{
+  "name": "task-dash",
+  "version": "0.1.0",
+  "description": "任务流水线面板：只读展示 .claude/backlog.md 任务池、自动循环、worker 与运行流水",
+  "types": "./types/index.d.ts",
+  "author": {
+    "name": "qiqll"
+  },
+  "license": "MIT",
+  "repository": "https://github.com/qiqll/claude-task-dash",
+  "keywords": [
+    "task",
+    "dashboard",
+    "backlog",
+    "pane"
+  ]
+}
