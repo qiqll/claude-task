@@ -646,7 +646,8 @@ export const register: Register = (on, options) => {
   })
 
   on('command.run', { command: 'task-dash' }, async ($, e) => {
-    const arg = e.args.trim()
+    const words = e.args.trim().toLowerCase().split(/\s+/).filter(Boolean)
+    const arg = words.join(' ')
     await ensureLang($, options)
     if (arg === 'off' || arg === 'on') {
       await update($, statusHidden, () => arg === 'off')
@@ -660,11 +661,12 @@ export const register: Register = (on, options) => {
       const snap = await read($, snapshot)
       return snap ? reportText(snap, await read($, agents), await $.clock.now(), all) : L.loading
     }
-    if (arg === 'report' || arg === 'report all') return { text: await printReport(arg === 'report all') }
+    if (words[0] === 'report') return { text: await printReport(words[1] === 'all') }
     const canDock = e.presentation.isFullscreen && e.presentation.columns >= DOCK_MIN_COLUMNS
     if (!canDock && arg !== 'inline') {
       // No dock: print the whole dashboard into the transcript instead of covering it.
-      return { text: `${await printReport(false)}\n\n${L.reportHint}` }
+      const why = e.presentation.isFullscreen ? L.narrow(e.presentation.columns, DOCK_MIN_COLUMNS) : L.notFullscreen
+      return { text: `${await printReport(false)}\n\n${L.reportHint(why)}` }
     }
     await $.ui.open({ id: PANE, title: L.title, focus: true })
     return { text: canDock ? L.openedDock : L.openedInline }
