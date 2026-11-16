@@ -11,7 +11,7 @@
 #   qtask -C <目录> ...              指定项目（默认当前目录所在 git 工作区，worktree 亦可）
 set -euo pipefail
 
-usage() { sed -n '2,13p' "$0" | sed 's/^# \{0,1\}//'; exit "${1:-0}"; }
+usage() { sed -n '2,11p' "$0" | sed 's/^# \{0,1\}//'; exit "${1:-0}"; }
 
 need() { [[ $# -ge 2 && -n "$2" ]] || { echo "$1 需要参数" >&2; exit 1; }; }
 dir="$PWD"; type="task"; priority=""; ref=""; action="add"

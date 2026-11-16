@@ -1,7 +1,7 @@
 ---
 name: add
 description: "把需求录入待办池 — 自动分配 ID、判定优先级、识别模块和依赖，写入 .claude/backlog.md。Usage: /task:add <需求描述>"
-user_invocable: true
+user-invocable: true
 argument-hint: "<需求描述>（口语化即可，可一次录多条）"
 ---
 

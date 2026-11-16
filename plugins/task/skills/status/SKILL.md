@@ -1,7 +1,7 @@
 ---
 name: status
 description: "待办池全局视图 — 各优先级任务数、进行中/阻塞情况、阻塞原因、下一步建议。Usage: /task:status"
-user_invocable: true
+user-invocable: true
 ---
 
 # 待办池状态

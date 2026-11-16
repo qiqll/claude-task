@@ -33,7 +33,7 @@ test('pane draws the pool and filters on every surface', async ($, on) => {
   on('fs.list', () => ({ value: [] }))
   on('ui.open', () => ({ value: { isPlaced: true as const } }))
   on('process.run', () => ({ value: { exitCode: 0, stdout: '(\n    "zh-Hans-CN"\n)\n', stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }))
-  on('env.get', () => ({ value: 'en_US.UTF-8' }))
+  on('env.get', (_$, e) => ({ value: e.name === 'LANG' ? 'en_US.UTF-8' : undefined }))
   on('ui.status', (_$, e) => {
     statuses.push(e.text)
     return { value: undefined }
@@ -119,7 +119,7 @@ test('an English system draws the pane and status line in English', async ($, on
   on('ui.open', () => ({ value: { isPlaced: true as const } }))
   // System says English even though LANG says Chinese: the system wins.
   on('process.run', () => ({ value: { exitCode: 0, stdout: '(\n    "en-US"\n)', stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }))
-  on('env.get', () => ({ value: 'zh_CN.UTF-8' }))
+  on('env.get', (_$, e) => ({ value: e.name === 'LANG' ? 'zh_CN.UTF-8' : undefined }))
   on('ui.status', (_$, e) => {
     statuses.push(e.text)
     return { value: undefined }

@@ -22,11 +22,22 @@
 | `/task:loop [max=10] [hours=8]` | 自动循环：主会话只调度，每个任务派后台 worker（`/task:auto`），机器重跑测试验收 |
 | `/task:status` | 全局视图：各优先级计数、待决策、阻塞、下一步建议 |
 | `/task-dash [inline\|off\|on]` | 打开右侧面板；`off`/`on` 隐藏或恢复状态行 |
-| `qtask "描述"` | 终端里往运行中的循环投递任务 / 决策（插件 `bin/`，`qtask -h` 看用法） |
+| `qtask "描述"` | 在自己的终端里往运行中的循环投递任务 / 决策（需单独安装，见下） |
 
 状态机：`待开始 → 进行中 → 待验证 → 已完成`，旁路 `阻塞` / `待决策` / `打回`。任务完成态是「待验证」，需求方确认后才归档。
 
-`/task:loop` 需要 git 仓库（记开工 SHA、按提交验收）；`/task:add` `/task:next` `/task:status` 不需要。
+`/task:loop` 需要 git 仓库（记开工 SHA、按提交验收）；`/task:add` `/task:next` `/task:status` 不需要。自动循环运行期间不要升级本插件（技能路径带版本号，升级会让运行中的循环找不到脚本）。
+
+### qtask（可选）
+
+插件的 `bin/` 只在 Claude 的 Bash 工具里可用，你自己的终端里没有。想在终端投递，装一份到 PATH：
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/qiqll/claude-task/main/plugins/task/bin/qtask -o ~/.local/bin/qtask && chmod +x ~/.local/bin/qtask
+qtask -h
+```
+
+不装也行：在调度会话里直接说「加个任务：…」「T-0NN 选 A」，效果相同。
 
 ## 面板与状态行
 
@@ -46,7 +57,7 @@ CLAUDE_CODE_NO_FLICKER=1 claude      # 或在 ~/.zshrc 里 export
 
 ### 界面语言
 
-面板、状态行和提醒跟随操作系统语言（中文系统显示中文，其余英文）。判定顺序：插件设置 `language` → macOS 系统首选语言 → `LC_ALL` / `LC_MESSAGES` / `LANG` → 运行时 locale。系统语言优先于 `LANG`，因为终端常设 `en_US` 而系统是中文。
+面板、状态行和提醒跟随操作系统语言（中文系统显示中文，其余英文）。判定顺序：插件设置 `language` → `LC_ALL` → macOS 系统首选语言 → `LC_MESSAGES` → `LANG` → 运行时 locale。系统语言优先于 `LANG`，因为终端常设 `en_US` 而系统是中文；`LC_ALL` 是显式覆盖，排在最前。
 
 固定某种语言：`/config` 里把 task 插件的 `language` 设为 `zh` 或 `en`。任务池内容（标题、备注）按原文显示，不翻译。
 
@@ -75,6 +86,17 @@ CLAUDE_CODE_NO_FLICKER=1 claude      # 或在 ~/.zshrc 里 export
 ## 审查门禁与专业 agent
 
 `/task:next` 与 worker 交付前会派 `code-reviewer`（涉及认证 / 用户输入 / 上传 / 加密时加 `security-analyst`）审查改动。环境里没有这些 agent 时，技能改派 `general-purpose` 子 agent 做同样的只读审查。项目 `CLAUDE.md` 有更严的门禁或测试口径时以项目为准。
+
+## 从旧版迁移
+
+用过本地 `~/.claude/skills/task-*` 或 `task-dash@claude-task-dash` 的：
+
+```sh
+claude plugin uninstall task-dash          # 旧面板插件（若装过）
+rm -rf ~/.claude/skills/task-{init,add,next,loop,auto,status}
+```
+
+再把项目 / 全局 `CLAUDE.md` 里的 `/task-add` `/task-next` `/task-loop` `/task-status` 改成 `/task:add` 等。任务池文件格式不变，已有 `.claude/backlog.md` 直接可用。
 
 ## 开发
 

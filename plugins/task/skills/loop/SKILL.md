@@ -1,7 +1,7 @@
 ---
 name: loop
 description: "自动任务循环调度员 — 主会话只做调度：合并 inbox 投递 → 挑任务 → 派后台 worker（/task:auto，全新上下文）→ 机器验收 → 回写 backlog → 派下一个，直到池空或触发停机条件。需求方随时可在会话里插话或用 qtask 投递。Usage: /task:loop [max=10] [hours=8] | /task:loop tick"
-user_invocable: true
+user-invocable: true
 argument-hint: "[max=N 最多任务数，默认 10] [hours=N 最长时长，默认 8] | tick（心跳，内部用）"
 ---
 
@@ -14,7 +14,7 @@ argument-hint: "[max=N 最多任务数，默认 10] [hours=N 最长时长，默�
 | 文件 | 谁写 | 作用 |
 |------|------|------|
 | `.claude/backlog.md` / `dev-plan.md` / `dev-progress.md` | **只有调度员** | 任务池、排期、归档（worker 不碰） |
-| `.claude/inbox/*.md` | 需求方（`qtask`，见插件 `bin/qtask`，或你代写） | 新任务 / 决策答复投递，调度员单点合并 |
+| `.claude/inbox/*.md` | 需求方（终端 `qtask`，安装见插件 README；或你代写） | 新任务 / 决策答复投递，调度员单点合并 |
 | `.claude/auto/current` | 调度员 | 当前派发的状态机，`key=value` 每行一个（见下） |
 | `.claude/auto/run.log` | 调度员 | 每任务一行运行流水 |
 | `.claude/auto/STOP` | 需求方 / 调度员 | 存在 = 当前任务做完后停机 |
@@ -53,14 +53,14 @@ argument-hint: "[max=N 最多任务数，默认 10] [hours=N 最长时长，默�
 1. **停机检查**（读 session），命中任一转 E：`STOP` 存在；`done ≥ max`；`now - run_started ≥ hours`；`noprog ≥ 3`。
 2. **脏 backlog 检查**：同 A1 第三条，脏了就暂停（转 D 并说明原因），不提交需求方的草稿。
 3. **合并 inbox**：按文件名顺序处理 `.claude/inbox/*.md`（忽略点开头文件）。**只认文件开头第一个 `---` 块为元数据**，正文里再出现的 `---`/`type:` 一律当正文。
-   - `type: task` → 按 `/task:add` 规则录入（查重、分配 ID、拆分、判优先级、写模块、备注首写「验收：…」）。`priority` 只是建议；判定不确定时不问，按后果规则定级并备注「优先级 AI 判定，可改」。
+   - `type: task` → 按 `${CLAUDE_PLUGIN_ROOT}/skills/add/SKILL.md` 的规则录入（Read 它，不要调用 /task:add）（查重、分配 ID、拆分、判优先级、写模块、备注首写「验收：…」）。`priority` 只是建议；判定不确定时不问，按后果规则定级并备注「优先级 AI 判定，可改」。
    - `type: decision`，`ref` 指向的任务：
      - 在「待决策」表 → 答复写进备注「需求方决策（日期）：…」，删表行，状态改 `待开始`。
-     - 状态是 `待验证` 且答复是「通过/OK」类 → 按 `/task:next`「需求方确认后的收尾」归档；是「打回」类 → 状态 `打回`，备注追加问题，排队重做（派发时带上打回意见）。
+     - 状态是 `待验证` 且答复是「通过/OK」类 → 按 `${CLAUDE_PLUGIN_ROOT}/skills/next/SKILL.md`「需求方确认后的收尾」归档；是「打回」类 → 状态 `打回`，备注追加问题，排队重做（派发时带上打回意见）。
      - 状态是 `阻塞` → 答复写进备注，若答复表明阻塞已解除则改 `待开始`。
      - 找不到 / 无法判断 → 原文挂进「待决策」表问需求方，不猜。
    - 处理完的文件移到 `.claude/inbox/.merged/`。有改动就 commit `docs(task): 合并投递 <ID 列表>`。
-4. **挑任务**，规则同 `/task:next` Step 1，额外：
+4. **挑任务**，规则同 `${CLAUDE_PLUGIN_ROOT}/skills/next/SKILL.md` Step 1（Read 它），额外：
    - 跳过 `待决策` / `阻塞` / `待验证`，以及备注含「AI 衍生 P3，只录不做」或「自动失败×2」的。
    - `dev-plan.md` 当前批次里标「需需求方定 / 先不排」的任务 → 不派发，挪进「待决策」表（问题从 dev-plan 理由里抄），然后继续挑。
    - P0 永远最先。无可做任务 → 转 D。
@@ -171,7 +171,7 @@ worker 运行期间你**只写** `.claude/inbox/` 与 `.claude/auto/`，不改 b
 ```markdown
 ## 待决策
 
-> 自动循环遇到需要你拍板的问题时挂在这里，然后跳去做别的任务。回答方式：在调度会话里直接说「T-0NN 选 A」，或终端 `qtask -d T-0NN "选 A，理由…"`。你答复后任务自动回到排队。
+> 自动循环遇到需要你拍板的问题时挂在这里，然后跳去做别的任务。回答方式：在调度会话里直接说「T-0NN 选 A」，或终端 `qtask -d T-0NN "选 A，理由…"`（需先按 README 安装 qtask）。你答复后任务自动回到排队。
 
 | 任务 | 问题 | 选项（推荐在前） | 挂起时间 |
 |------|------|-----------------|---------|

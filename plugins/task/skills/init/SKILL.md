@@ -1,7 +1,7 @@
 ---
 name: init
 description: "在当前项目初始化任务待办池机制 — 创建 .claude/backlog.md / dev-plan.md / dev-progress.md 三个数据文件（已存在则跳过），之后即可用 /task:add /task:next /task:status。Usage: /task:init"
-user_invocable: true
+user-invocable: true
 ---
 
 # 初始化任务待办池
@@ -38,7 +38,7 @@ user_invocable: true
 
 | 触发场景 | 调用 |
 |---------|------|
-| 需求方描述新需求/Bug（不要求立刻做） | `/task:add` 录入待办池（终端可用插件自带的 `qtask "描述"` 投递） |
+| 需求方描述新需求/Bug（不要求立刻做） | `/task:add` 录入待办池（终端装了 `qtask` 的可用 `qtask "描述"` 投递，见插件 README） |
 | 需求方说"自动跑/挂机/开启自动模式" | `/task:loop` 调度员 + 后台 worker 连续消化 |
 | 需求方说"继续/下一个/开始开发/接着做" | 自动循环运行中 → 交给调度员；否则 `/task:next` 单步 |
 | 需求方问"进度如何/还有什么没做/待办清单" | `/task:status` |

@@ -1,7 +1,7 @@
 ---
 name: next
 description: "消化待办池里的下一个任务 — 挑任务、实施、过退出门禁、提交、归档进度，然后停下来等需求方确认。Usage: /task:next [可选：指定任务 ID]"
-user_invocable: true
+user-invocable: true
 argument-hint: "[T-0NN] 可选，指定任务 ID；留空则由 AI 按优先级自动挑选"
 ---
 

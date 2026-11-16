@@ -19,11 +19,13 @@ describe('language', () => {
     expect(firstAppleLanguage('')).toBeNull()
   })
 
-  test('setting, then system language, then LC_ALL / LC_MESSAGES / LANG, then runtime', () => {
+  test('setting, LC_ALL, system language, LC_MESSAGES, LANG, runtime', () => {
     // A Chinese macOS with an English terminal locale shows Chinese.
     expect(pickLang('auto', { system: 'zh-Hans-CN', env: [undefined, undefined, 'en_US.UTF-8'] })).toBe('zh')
     expect(pickLang('en', { system: 'zh-Hans-CN', env: [] })).toBe('en')
     expect(pickLang('auto', { system: null, env: ['', 'zh_CN.UTF-8', 'en_US.UTF-8'] })).toBe('zh')
+    // LC_ALL is an explicit override and beats the system list.
+    expect(pickLang('auto', { system: 'zh-Hans-CN', env: ['en_US.UTF-8', undefined, undefined] })).toBe('en')
     expect(pickLang('auto', { system: null, env: [undefined, undefined, 'C'], runtime: 'zh-CN' })).toBe('zh')
     expect(pickLang(undefined, { env: [] })).toBe('en')
   })

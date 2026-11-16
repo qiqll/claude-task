@@ -19,13 +19,15 @@ export function firstAppleLanguage(output: string): string | null {
 }
 
 /**
- * The setting wins unless `auto`; then the OS's own language list (macOS),
- * then the locale variables in POSIX order, then the runtime's locale.
+ * The setting wins unless `auto`; then LC_ALL (an explicit override), the OS's
+ * own language list (macOS), LC_MESSAGES, LANG, and the runtime's locale.
  * The OS list comes before LANG: a terminal often says `en_US` on a Chinese system.
+ * `env` is [LC_ALL, LC_MESSAGES, LANG].
  */
 export function pickLang(setting: unknown, sources: { system?: string | null; env: (string | undefined)[]; runtime?: string }): Lang {
   if (setting === 'zh' || setting === 'en') return setting
-  return langOf(sources.system) ?? sources.env.map(langOf).find(Boolean) ?? langOf(sources.runtime) ?? 'en'
+  const [lcAll, lcMessages, lang] = sources.env
+  return langOf(lcAll) ?? langOf(sources.system) ?? langOf(lcMessages) ?? langOf(lang) ?? langOf(sources.runtime) ?? 'en'
 }
 
 const STATUS_EN: Record<string, string> = {

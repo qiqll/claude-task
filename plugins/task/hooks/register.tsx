@@ -13,6 +13,7 @@ const ROOT_CACHE_MS = 30_000
 const MAX_AGENTS = 20
 /** Below this the terminal cannot dock a pane beside the transcript. */
 const DOCK_MIN_COLUMNS = 110
+const SYSTEM_LANG_TIMEOUT_MS = 1500
 
 const snapshot = atom({ plugin: 'task', key: 'snapshot' } as const, null)
 const filter = atom({ plugin: 'task', key: 'filter' } as const, 'active')
@@ -42,30 +43,46 @@ async function currentStrings($: EngineInterface): Promise<Strings> {
   return L
 }
 
-/** Setting → macOS AppleLanguages → LC_ALL / LC_MESSAGES / LANG → runtime. */
-async function detectLang($: EngineInterface, options: PluginOptions): Promise<Lang> {
-  const setting = options.language
-  if (setting === 'zh' || setting === 'en') return setting
-  const apple = await $.process
-    .run(['defaults', 'read', '-g', 'AppleLanguages'])
-    .then(r => (r.exitCode === 0 ? firstAppleLanguage(r.stdout) : null))
-    .catch(() => null)
-  const env = await Promise.all([
+/** Setting → LC_ALL → macOS AppleLanguages → LC_MESSAGES / LANG → runtime. */
+async function envLocales($: EngineInterface): Promise<(string | undefined)[]> {
+  return Promise.all([
     $.env.get('LC_ALL').catch(() => undefined),
     $.env.get('LC_MESSAGES').catch(() => undefined),
     $.env.get('LANG').catch(() => undefined),
   ])
-  return pickLang(setting, { system: apple, env, runtime: runtimeLocale() })
 }
 
-let langDetected = false
+/** The macOS language list's first entry; null elsewhere or when `defaults` is slow. */
+async function systemLocale($: EngineInterface): Promise<string | null> {
+  return $.process
+    .run(['defaults', 'read', '-g', 'AppleLanguages'], { timeoutMs: SYSTEM_LANG_TIMEOUT_MS })
+    .then(r => (r.exitCode === 0 ? firstAppleLanguage(r.stdout) : null))
+    .catch(() => null)
+}
 
-async function ensureLang($: EngineInterface, options: PluginOptions, force = false) {
-  if (langDetected && !force) return
-  langDetected = true
-  const lang = await detectLang($, options)
+async function setLang($: EngineInterface, lang: Lang) {
   if ((await read($, langAtom)) !== lang) await update($, langAtom, () => lang)
   L = STRINGS[lang]
+}
+
+let langDetected: Promise<void> | null = null
+
+/**
+ * Detects the UI language. `quick`: settle on setting/env/runtime now and ask the
+ * OS list in the background (session start must not wait on `defaults`).
+ */
+function ensureLang($: EngineInterface, options: PluginOptions, { force = false, quick = false } = {}): Promise<void> {
+  if (langDetected && !force) return langDetected
+  const setting = options.language
+  langDetected = (async () => {
+    if (setting === 'zh' || setting === 'en') return setLang($, setting)
+    const env = await envLocales($)
+    const full = async () => setLang($, pickLang(setting, { system: await systemLocale($), env, runtime: runtimeLocale() }))
+    if (!quick) return full()
+    await setLang($, pickLang(setting, { env, runtime: runtimeLocale() }))
+    void full().catch(() => undefined)
+  })()
+  return langDetected
 }
 
 const ACTIVE = new Set(['进行中', '打回', '待决策', '阻塞', '待验证'])
@@ -552,7 +569,7 @@ async function drawPane($: EngineInterface, els: Els, cols: number) {
 
 export const register: Register = (on, options) => {
   on('session.start', async ($, e, next) => {
-    await ensureLang($, options, true)
+    await ensureLang($, options, { force: true, quick: true })
     await $.command.register({
       name: 'task-dash',
       description: L.cmdDescription,

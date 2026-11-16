@@ -1,7 +1,7 @@
 ---
 name: auto
 description: "自动循环的 worker 单元 — 由 /task:loop 调度员派发，在全新上下文里完整交付一个指定任务（定向→实施→门禁→commit），以结构化报告返回，不碰 backlog。Usage: /task:auto T-0NN"
-user_invocable: true
+user-invocable: true
 argument-hint: "T-0NN（必填，由调度员指定）"
 ---
 
