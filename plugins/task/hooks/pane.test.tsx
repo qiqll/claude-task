@@ -278,8 +278,8 @@ test('the main session at work reads 空闲 · 会话执行中 until its turn en
   // The subagent's own turn ending is not the session's.
   await $.turn.complete({ ...done, turnId: 'sub', agentId: 'a1' })
   expect(statuses.at(-1)).toContain('会话执行中')
-  // The main turn ends while the subagent runs on.
-  await $.turn.complete(done)
+  // The main turn ends, interrupted, while the subagent runs on.
+  await $.turn.complete({ ...done, isAborted: true, reason: 'aborted' })
   expect(statuses.at(-1)).not.toContain('会话执行中')
   expect(statuses.at(-1)).toContain('● 空闲 · 子代理 1 个运行中')
   expect(await ui.find({ type: 'Text', text: /会话执行中/ })).toBeUndefined()
@@ -287,11 +287,13 @@ test('the main session at work reads 空闲 · 会话执行中 until its turn en
   await $.command.run({ ...RUN, args: 'report' })
   expect(statuses.at(-1)).not.toContain('子代理')
   await ui.unmount()
-  // A turn cut off without turn.complete is not carried into the next session.
+  // A reload mid-turn raises session.start again: the turn is still under way.
   await $.turn.start({ text: '', turnId: 't2' })
   expect(statuses.at(-1)).toContain('会话执行中')
   await $.session.start({ cwd: '/proj', surface: 'terminal', isInteractive: true })
   await $.command.run({ ...RUN, args: 'report' })
+  expect(statuses.at(-1)).toContain('● 空闲 · 会话执行中')
+  await $.turn.complete({ ...done, turnId: 't2', reason: 'error' })
   expect(statuses.at(-1)).not.toContain('会话执行中')
 })
 
