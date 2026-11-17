@@ -425,21 +425,47 @@ function Heading({ els, title, extra }: { els: Els; title: string; extra?: strin
   const { Box, Text } = els
   return (
     <Box>
-      <Text bold>{title}</Text>
+      <Text bold color="claude">
+        {title}
+      </Text>
       {extra ? <Text dimColor> {extra}</Text> : null}
     </Box>
   )
 }
 
-function Stat({ els, label, value, color }: { els: Els; label: string; value: string; color?: string }) {
+/** Below this a row of four tiles gets too narrow to read; the tiles go two to a row. */
+const TILES_4_MIN_COLUMNS = 48
+
+/** One metric as a framed tile: label above, value below. */
+function Stat({ els, label, value, color, width }: { els: Els; label: string; value: string; color?: string; width: number }) {
   const { Box, Text } = els
   return (
-    <Box marginRight={2}>
-      <Text dimColor>{label} </Text>
-      <Text bold color={color}>
+    <Box flexDirection="column" width={width} borderStyle="round" borderColor="subtle" paddingX={1}>
+      <Text dimColor wrap="truncate-end">
+        {label}
+      </Text>
+      <Text bold color={color} wrap="truncate-end">
         {value}
       </Text>
     </Box>
+  )
+}
+
+/** A status as a coloured tag, right-aligned at the end of a task row. */
+function StatusTag({ els, status, label }: { els: Els; status: string; label: string }) {
+  const { Text } = els
+  const color = STATUS_COLOR[status]
+  return (
+    <Text>
+      {' '}
+      {color ? (
+        <Text backgroundColor={color} color="inverseText" bold>
+          {` ${label} `}
+        </Text>
+      ) : (
+        <Text color="subtle">{` ${label} `}</Text>
+      )}
+    </Text>
   )
 }
 
@@ -462,7 +488,7 @@ function CurrentCard({ els, snap, now }: { els: Els; snap: Snapshot; now: number
     snap.inbox ? `inbox ${snap.inbox}` : null,
   ].filter(Boolean)
   return (
-    <Box flexDirection="column">
+    <Box flexDirection="column" borderStyle="round" borderColor="claude" paddingX={1}>
       <Box>
         <Text color="claude" bold>
           {cur.task}{' '}
@@ -502,7 +528,7 @@ function taskRow($: EngineInterface, els: Els, task: Task, isOpen: boolean, isCu
             {task.title}
           </Text>
         </Box>
-        <Text color={STATUS_COLOR[task.status] ?? 'subtle'}> {statusLabel(L, task.status, task.statusLabel)}</Text>
+        <StatusTag els={els} status={task.status} label={statusLabel(L, task.status, task.statusLabel)} />
       </Box>
       {isOpen ? (
         <Box flexDirection="column" paddingLeft={4} marginBottom={1}>
@@ -588,6 +614,8 @@ async function drawPane($: EngineInterface, els: Els, cols: number) {
   const now = Math.max(snap.readAt, await read($, nowAtom))
   const [agentList, filterKey, opened] = await Promise.all([read($, agents), read($, filter), read($, openTask)])
   const active = FILTERS.find(f => f.key === filterKey) ?? FILTERS[0]!
+  const perRow = cols >= TILES_4_MIN_COLUMNS ? 4 : 2
+  const tile = Math.floor(cols / perRow)
   const shown = snap.tasks.filter(active.match)
   const sessionText = s
     ? [
@@ -611,17 +639,16 @@ async function drawPane($: EngineInterface, els: Els, cols: number) {
 
       <Heading els={els} title={L.currentTask} />
       <CurrentCard els={els} snap={snap} now={now} />
-      <Rule els={els} cols={cols} />
 
       <Box flexWrap="wrap">
-        <Stat els={els} label={L.stats.completion} value={percent(m.completionRate)} color="success" />
-        <Stat els={els} label={L.stats.delivery} value={percent(m.deliveryRate)} color="claude" />
-        <Stat els={els} label={L.stats.firstPass} value={percent(m.firstPassRate)} color={m.firstPassRate === null ? undefined : 'success'} />
-        <Stat els={els} label={L.stats.delivered7d} value={`${m.delivered7d}`} color="claude" />
-        <Stat els={els} label={L.stats.medianCycle} value={duration(m.medianCycleMs)} />
-        <Stat els={els} label={L.stats.wip} value={`${c['进行中'] ?? 0}`} color={(c['进行中'] ?? 0) > 1 ? 'error' : 'success'} />
-        <Stat els={els} label={L.stats.verify} value={`${c['待验证'] ?? 0}`} color={c['待验证'] ? 'warning' : undefined} />
-        <Stat els={els} label={L.stats.archived} value={`${c.archived}`} />
+        <Stat els={els} width={tile} label={L.stats.completion} value={percent(m.completionRate)} color="success" />
+        <Stat els={els} width={tile} label={L.stats.delivery} value={percent(m.deliveryRate)} color="claude" />
+        <Stat els={els} width={tile} label={L.stats.firstPass} value={percent(m.firstPassRate)} color={m.firstPassRate === null ? undefined : 'success'} />
+        <Stat els={els} width={tile} label={L.stats.delivered7d} value={`${m.delivered7d}`} color="claude" />
+        <Stat els={els} width={tile} label={L.stats.medianCycle} value={duration(m.medianCycleMs)} />
+        <Stat els={els} width={tile} label={L.stats.wip} value={`${c['进行中'] ?? 0}`} color={(c['进行中'] ?? 0) > 1 ? 'error' : 'success'} />
+        <Stat els={els} width={tile} label={L.stats.verify} value={`${c['待验证'] ?? 0}`} color={c['待验证'] ? 'warning' : undefined} />
+        <Stat els={els} width={tile} label={L.stats.archived} value={`${c.archived}`} />
       </Box>
       <Rule els={els} cols={cols} />
 
@@ -651,9 +678,13 @@ async function drawPane($: EngineInterface, els: Els, cols: number) {
           {snap.decisions.map((d, i) => (
             <Box key={`decision:${d.task}:${i}`} flexDirection="column" marginBottom={1}>
               <Text wrap="wrap">
-                <Text color="warning">{d.task}</Text> {d.question}
+                <Text color="warning" bold>
+                  {d.task}
+                </Text>{' '}
+                {d.question}
               </Text>
               <Text dimColor wrap="wrap">
+                {'    '}
                 {d.options}
               </Text>
             </Box>
@@ -670,7 +701,10 @@ async function drawPane($: EngineInterface, els: Els, cols: number) {
             .map((b, i) => (
               <Box key={`human:${b.id}:${i}`}>
                 <Text wrap="wrap">
-                <Text color="error">{b.id}</Text> {b.desc} <Text dimColor>→ {b.blocks}</Text>
+                <Text color="error" bold>
+                  {b.id}
+                </Text>{' '}
+                {b.desc} <Text dimColor>→ {b.blocks}</Text>
                 </Text>
               </Box>
             ))}

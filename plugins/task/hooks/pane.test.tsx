@@ -318,3 +318,31 @@ test('a hidden status line stays hidden on a failed read, and the timer starts o
   expect(statuses.every(t => t === undefined)).toBe(true)
   expect(timers).toBe(1)
 })
+
+test('the pane frames the current task and metrics as tiles and tags statuses in colour', async ($, on) => {
+  on('session.cwd', () => ({ value: '/proj' }))
+  on('clock.now', () => ({ value: new Date(2026, 10, 15, 12, 0, 0).getTime() }))
+  on('fs.exists', (_$, e) => ({ value: e.path in FILES }))
+  on('fs.list', () => ({ value: [] }))
+  on('fs.read', (_$, e) => (FILES[e.path] === undefined ? { deny: 'ENOENT' } : { value: FILES[e.path]! }))
+  on('ui.open', () => ({ value: { isPlaced: true as const } }))
+  on('ui.status', () => ({ value: undefined }))
+  on('process.run', () => ({ deny: 'not macOS' }))
+  on('env.get', (_$, e) => ({ value: e.name === 'LANG' ? 'zh_CN.UTF-8' : undefined }))
+  on('agent.list', () => ({ value: [] }))
+  await $.command.run(RUN)
+  for (const [cols, perRow] of [[80, 4], [40, 2]] as const) {
+    const ui = await $.ui.mount({ plugin: 'task', surface: 'terminal', component: 'Pane', requestId: 'task-dash', props: { ...PANE_PROPS, bodyColumns: cols } })
+    const boxes = await ui.findAll({ type: 'Box' })
+    // The current task sits in an accent-framed card.
+    expect(boxes.some(b => b.props.borderStyle === 'round' && b.props.borderColor === 'claude')).toBe(true)
+    // Eight metric tiles, four to a row on a normal pane, two on a narrow one.
+    const tiles = boxes.filter(b => b.props.borderStyle === 'round' && b.props.borderColor === 'subtle')
+    expect(tiles).toHaveLength(8)
+    expect(tiles.every(t => t.props.width === Math.floor(cols / perRow))).toBe(true)
+    // The running task's status is a filled tag, not bare coloured text.
+    const tags = await ui.findAll({ type: 'Text', text: /进行中/ })
+    expect(tags.some(t => t.props.backgroundColor === 'claude' && t.props.color === 'inverseText')).toBe(true)
+    await ui.unmount()
+  }
+})
