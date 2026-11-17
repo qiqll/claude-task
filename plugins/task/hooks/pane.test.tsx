@@ -291,3 +291,30 @@ test('a failed first read is shown, not left as loading, and the status line say
   expect(statuses.at(-1)).toContain('待验证 1')
   expect(statuses.at(-1)).not.toContain('⚠')
 })
+
+test('a hidden status line stays hidden on a failed read, and the timer starts once without session.start', async ($, on) => {
+  const statuses: (string | undefined)[] = []
+  let timers = 0
+  on('session.cwd', () => ({ deny: 'cwd unavailable' }))
+  on('clock.now', () => ({ value: new Date(2026, 10, 15, 12, 0, 0).getTime() }))
+  // A refused period ends the interval, so each count is one start.
+  on('clock.every', () => {
+    timers++
+    return { deny: 'no timers in tests' }
+  })
+  on('fs.exists', () => ({ value: false }))
+  on('fs.list', () => ({ value: [] }))
+  on('fs.read', () => ({ deny: 'ENOENT' }))
+  on('process.run', () => ({ deny: 'not macOS' }))
+  on('env.get', (_$, e) => ({ value: e.name === 'LANG' ? 'zh_CN.UTF-8' : undefined }))
+  on('agent.list', () => ({ value: [] }))
+  on('ui.status', (_$, e) => {
+    statuses.push(e.text)
+    return { value: undefined }
+  })
+  await $.command.run({ ...RUN, args: 'off' })
+  await $.command.run({ ...RUN, args: 'report' })
+  expect(statuses.length).toBeGreaterThan(0)
+  expect(statuses.every(t => t === undefined)).toBe(true)
+  expect(timers).toBe(1)
+})

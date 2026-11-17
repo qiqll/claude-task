@@ -289,10 +289,12 @@ async function showStatus($: EngineInterface, snap: Snapshot | null, now: number
   }
 }
 
-async function readOnce($: EngineInterface) {
+/** `mine`: the refresh this read belongs to; one abandoned meanwhile writes nothing. */
+async function readOnce($: EngineInterface, mine: number) {
   const now = await $.clock.now()
   const root = await findRoot($, now)
   const files: PoolFiles = root ? await readPool($, root) : { hasStopFile: false, inbox: 0 }
+  if (mine !== generation) return
   if (root && files.backlog === undefined) rootCache = null // pool removed: look again next time
   const signature = signatureOf(root, files)
   const prev = await read($, snapshot)
@@ -305,21 +307,27 @@ async function readOnce($: EngineInterface) {
     lastSignature = signature
   }
   if (snap?.current || signature !== lastSignature) await update($, nowAtom, () => now)
-  await showStatus($, snap, now)
   if (await read($, lastError)) await update($, lastError, () => null)
+  await showStatus($, snap, now)
 }
 
-let ticking = false
+let ticker: { cancel: () => void } | null = null
+let lastTickAt = 0
 
 /**
  * Starts the periodic read once per module load. A reload cancels the old
- * module's timers and resets this flag, so any hook of the new one (not only
- * session.start, which an update may not raise again) brings the timer back.
+ * module's timers and resets this state, so any hook of the new one (not only
+ * session.start, which an update may not raise again) brings the timer back;
+ * so does a timer silent for three periods (a refused period ends an interval).
  */
 function ensureTicking($: EngineInterface) {
-  if (ticking) return
-  ticking = true
-  $.clock.every(REFRESH_MS, () => void refresh($))
+  if (ticker && Date.now() - lastTickAt < REFRESH_MS * 3) return
+  ticker?.cancel()
+  lastTickAt = Date.now()
+  ticker = $.clock.every(REFRESH_MS, () => {
+    lastTickAt = Date.now()
+    void refresh($)
+  })
 }
 
 let refreshStartedAt = 0
@@ -333,9 +341,11 @@ let generation = 0
 function refresh($: EngineInterface): Promise<void> {
   if (refreshing && Date.now() - refreshStartedAt > READ_TIMEOUT_MS) {
     refreshing = null
-    void update($, lastError, () => L.readTimeout(READ_TIMEOUT_MS / 1000))
-      .then(async () => showStatus($, await read($, snapshot), await $.clock.now()))
-      .catch(() => undefined)
+    void (async () => {
+      const strings = await currentStrings($)
+      await update($, lastError, () => strings.readTimeout(READ_TIMEOUT_MS / 1000))
+      await showStatus($, await read($, snapshot), await $.clock.now())
+    })().catch(() => undefined)
   }
   if (refreshing) {
     again = true
@@ -347,9 +357,9 @@ function refresh($: EngineInterface): Promise<void> {
     do {
       again = false
       try {
-        await readOnce($)
+        await readOnce($, mine)
       } catch (err) {
-        await update($, lastError, () => (err instanceof Error ? err.message : String(err))).catch(() => undefined)
+        if (mine === generation) await update($, lastError, () => (err instanceof Error ? err.message : String(err))).catch(() => undefined)
       }
       // Apart from the pool read, so a failing read does not leave 运行中 standing.
       await settleAgents($).catch(() => undefined)
