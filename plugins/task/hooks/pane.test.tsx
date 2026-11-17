@@ -353,3 +353,38 @@ test('the pane frames the current task and shows metrics as tiles only where lab
   expect(todo.some(t => t.props.color === 'subtle' && t.props.backgroundColor === undefined)).toBe(true)
   await ui.unmount()
 })
+
+test('on a narrow pane a status tag stays one line and the title gives way; no refresh button', async ($, on) => {
+  on('session.cwd', () => ({ value: '/proj' }))
+  on('clock.now', () => ({ value: new Date(2026, 10, 15, 12, 0, 0).getTime() }))
+  on('fs.exists', (_$, e) => ({ value: e.path in FILES }))
+  on('fs.list', () => ({ value: [] }))
+  on('fs.read', (_$, e) => (FILES[e.path] === undefined ? { deny: 'ENOENT' } : { value: FILES[e.path]! }))
+  on('ui.open', () => ({ value: { isPlaced: true as const } }))
+  on('ui.status', () => ({ value: undefined }))
+  on('process.run', () => ({ deny: 'not macOS' }))
+  on('env.get', (_$, e) => ({ value: e.name === 'LANG' ? 'zh_CN.UTF-8' : undefined }))
+  on('agent.list', () => ({ value: [] }))
+  await $.command.run(RUN)
+  // ~46 columns is where 待验证 used to wrap a character to a line.
+  for (const cols of [46, 30, 80]) {
+    const ui = await $.ui.mount({ plugin: 'task', surface: 'terminal', component: 'Pane', requestId: 'task-dash', props: { ...PANE_PROPS, bodyColumns: cols } })
+    // The pane re-reads by itself: no refresh button in the heading.
+    expect(await ui.find({ key: 'refresh' })).toBeUndefined()
+    expect(await ui.find({ type: 'Button', text: /刷新/ })).toBeUndefined()
+    for (const id of ['T-071', 'T-107']) {
+      const tag = await ui.find({ key: `tag:${id}` })
+      expect(tag?.props.flexShrink).toBe(0)
+      // The ID and priority keep their width too; only the title shrinks.
+      expect((await ui.find({ key: `lead:${id}` }))?.props.flexShrink).toBe(0)
+      const title = await ui.find({ key: `title:${id}` })
+      expect(title?.props.flexShrink).toBe(1)
+      expect(title?.props.minWidth).toBe(0)
+    }
+    // The tag's text is whole, on one line.
+    const tag = await ui.find({ key: 'tag:T-107' })
+    expect(tag?.text).toContain(' 待验证 ')
+    expect(tag?.text).not.toContain('\n')
+    await ui.unmount()
+  }
+})

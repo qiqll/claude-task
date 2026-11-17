@@ -477,21 +477,27 @@ function Stat({ els, label, value, color, width }: { els: Els; label: string; va
   )
 }
 
-/** A status as a coloured tag, right-aligned at the end of a task row. */
-function StatusTag({ els, status, label }: { els: Els; status: string; label: string }) {
-  const { Text } = els
+/**
+ * A status as a coloured tag, right-aligned at the end of a task row. It never
+ * shrinks: on a narrow pane the title gives way, not the tag (which would wrap
+ * a character to a line and make the row several rows tall).
+ */
+function StatusTag({ els, status, label, tagKey }: { els: Els; status: string; label: string; tagKey: string }) {
+  const { Box, Text } = els
   const color = STATUS_COLOR[status]
   return (
-    <Text>
-      {' '}
-      {color ? (
-        <Text backgroundColor={color} color="black" bold>
-          {` ${label} `}
-        </Text>
-      ) : (
-        <Text color="subtle">{` ${label} `}</Text>
-      )}
-    </Text>
+    <Box key={tagKey} flexShrink={0}>
+      <Text wrap="truncate-end">
+        {' '}
+        {color ? (
+          <Text backgroundColor={color} color="black" bold>
+            {` ${label} `}
+          </Text>
+        ) : (
+          <Text color="subtle">{` ${label} `}</Text>
+        )}
+      </Text>
+    </Box>
   )
 }
 
@@ -541,20 +547,22 @@ function taskRow($: EngineInterface, els: Els, task: Task, isOpen: boolean, isCu
   return (
     <Box key={`row:${task.id}`} flexDirection="column">
       <Box>
-        <Text color={PRIORITY_COLOR[task.priority] ?? 'subtle'}>{task.priority || '—'} </Text>
-        <Button
-          plain
-          key={`task:${task.id}`}
-          label={`${isOpen ? '▾' : '▸'} ${task.id}`}
-          onPress={() => update($, openTask, v => (v === task.id ? null : task.id))}
-        />
-        <Text> </Text>
-        <Box flexGrow={1} flexShrink={1} minWidth={0}>
+        <Box key={`lead:${task.id}`} flexShrink={0}>
+          <Text color={PRIORITY_COLOR[task.priority] ?? 'subtle'}>{task.priority || '—'} </Text>
+          <Button
+            plain
+            key={`task:${task.id}`}
+            label={`${isOpen ? '▾' : '▸'} ${task.id}`}
+            onPress={() => update($, openTask, v => (v === task.id ? null : task.id))}
+          />
+          <Text> </Text>
+        </Box>
+        <Box key={`title:${task.id}`} flexGrow={1} flexShrink={1} minWidth={0}>
           <Text wrap="truncate-end" bold={isCurrent}>
             {task.title}
           </Text>
         </Box>
-        <StatusTag els={els} status={task.status} label={statusLabel(L, task.status, task.statusLabel)} />
+        <StatusTag els={els} tagKey={`tag:${task.id}`} status={task.status} label={statusLabel(L, task.status, task.statusLabel)} />
       </Box>
       {isOpen ? (
         <Box flexDirection="column" paddingLeft={4} marginBottom={1}>
@@ -609,7 +617,6 @@ async function drawPane($: EngineInterface, els: Els, cols: number) {
         ) : null}
         {direct ? <Text color="claude"> · {direct}</Text> : null}
       </Box>
-      <Button key="refresh" hotkey="r" label={L.refresh} onPress={() => refresh($)} />
     </Box>
   )
 
@@ -620,6 +627,12 @@ async function drawPane($: EngineInterface, els: Els, cols: number) {
         {header}
         {err ? <Text color="error" wrap="wrap">{err}</Text> : <Text dimColor>{L.loading}</Text>}
         {err ? <Text dimColor wrap="wrap">{L.retryHint}</Text> : null}
+        {/* The pane re-reads every few seconds; a button is only worth its room while the first read has failed. */}
+        {err ? (
+          <Box>
+            <Button key="refresh" hotkey="r" label={L.retry} onPress={() => refresh($)} />
+          </Box>
+        ) : null}
       </Box>
     )
   }
