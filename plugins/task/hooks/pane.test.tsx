@@ -258,3 +258,36 @@ test('a subagent dropped from the engine list without a stop is settled, even wh
   await $.command.run({ ...RUN, args: 'report' })
   expect(statuses.at(-1)).toBeUndefined()
 })
+
+test('a failed first read is shown, not left as loading, and the status line says the data is stale', async ($, on) => {
+  const statuses: (string | undefined)[] = []
+  let broken = true
+  on('clock.now', () => ({ value: new Date(2026, 10, 15, 12, 0, 0).getTime() }))
+  on('fs.exists', (_$, e) => ({ value: e.path in FILES }))
+  on('fs.list', () => ({ value: [] }))
+  on('fs.read', (_$, e) => (FILES[e.path] === undefined ? { deny: 'ENOENT' } : { value: FILES[e.path]! }))
+  // The first read fails outright (the engine refuses the cwd), then recovers.
+  on('session.cwd', () => (broken ? { deny: 'cwd unavailable' } : { value: '/proj' }))
+  on('ui.open', () => ({ value: { isPlaced: true as const } }))
+  on('process.run', () => ({ deny: 'not macOS' }))
+  on('env.get', (_$, e) => ({ value: e.name === 'LANG' ? 'zh_CN.UTF-8' : undefined }))
+  on('agent.list', () => ({ value: [] }))
+  on('ui.status', (_$, e) => {
+    statuses.push(e.text)
+    return { value: undefined }
+  })
+  const first = await $.command.run({ ...RUN, args: 'report' })
+  expect(first?.text).toContain('cwd unavailable')
+  expect(first?.text).not.toContain('加载任务池')
+  expect(statuses.at(-1)).toContain('⚠ 读取失败')
+  const ui = await $.ui.mount({ plugin: 'task', surface: 'terminal', component: 'Pane', requestId: 'task-dash', props: PANE_PROPS })
+  expect(await ui.find({ type: 'Text', text: /cwd unavailable/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: '加载任务池…' })).toBeUndefined()
+  // Retry from the pane once the cause is gone: the pool shows, the warning leaves.
+  broken = false
+  await ui.press({ key: 'refresh' })
+  expect(await ui.find({ type: 'Text', text: /人工放行池管理/ })).toBeDefined()
+  await ui.unmount()
+  expect(statuses.at(-1)).toContain('待验证 1')
+  expect(statuses.at(-1)).not.toContain('⚠')
+})

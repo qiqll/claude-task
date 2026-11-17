@@ -271,11 +271,18 @@ function reportText(snap: Snapshot, agentList: AgentRow[], now: number, all: boo
 let refreshing: Promise<void> | null = null
 let again = false
 let lastSignature = ''
-let lastStatus: string | undefined
+/**
+ * The line this module last pinned. Starts as one no line equals, so a freshly
+ * (re)loaded module always pins its own first, clearing what an earlier load left.
+ */
+let lastStatus: string | undefined = '\u0000'
 
 async function showStatus($: EngineInterface, snap: Snapshot | null, now: number) {
   await currentStrings($)
-  const text = snap && !(await read($, statusHidden)) ? statusLine(snap, await read($, agents), now) : undefined
+  const [hidden, agentList, err] = await Promise.all([read($, statusHidden), read($, agents), read($, lastError)])
+  let text = snap && !hidden ? statusLine(snap, agentList, now) : undefined
+  // A failed read says so rather than passing off the last snapshot as current.
+  if (err && !hidden) text = `${text ?? L.title} · ⚠ ${L.readFailed}`
   if (text !== lastStatus) {
     lastStatus = text
     $.ui.status(text)
@@ -302,6 +309,19 @@ async function readOnce($: EngineInterface) {
   if (await read($, lastError)) await update($, lastError, () => null)
 }
 
+let ticking = false
+
+/**
+ * Starts the periodic read once per module load. A reload cancels the old
+ * module's timers and resets this flag, so any hook of the new one (not only
+ * session.start, which an update may not raise again) brings the timer back.
+ */
+function ensureTicking($: EngineInterface) {
+  if (ticking) return
+  ticking = true
+  $.clock.every(REFRESH_MS, () => void refresh($))
+}
+
 let refreshStartedAt = 0
 let generation = 0
 
@@ -314,6 +334,8 @@ function refresh($: EngineInterface): Promise<void> {
   if (refreshing && Date.now() - refreshStartedAt > READ_TIMEOUT_MS) {
     refreshing = null
     void update($, lastError, () => L.readTimeout(READ_TIMEOUT_MS / 1000))
+      .then(async () => showStatus($, await read($, snapshot), await $.clock.now()))
+      .catch(() => undefined)
   }
   if (refreshing) {
     again = true
@@ -530,10 +552,12 @@ async function drawPane($: EngineInterface, els: Els, cols: number) {
   )
 
   if (!snap) {
+    // No snapshot yet: a failed or timed-out first read is said, not left as 加载中.
     return (
       <Box flexDirection="column" width={cols}>
         {header}
-        <Text dimColor>{L.loading}</Text>
+        {err ? <Text color="error" wrap="wrap">{err}</Text> : <Text dimColor>{L.loading}</Text>}
+        {err ? <Text dimColor wrap="wrap">{L.retryHint}</Text> : null}
       </Box>
     )
   }
@@ -690,7 +714,7 @@ export const register: Register = (on, options) => {
       description: L.cmdDescription,
       argumentHint: '[report [all]|inline|off|on]',
     })
-    $.clock.every(REFRESH_MS, () => void refresh($))
+    ensureTicking($)
     void refresh($)
     return next(e)
   })
@@ -698,6 +722,7 @@ export const register: Register = (on, options) => {
   on('command.run', { command: 'task-dash' }, async ($, e) => {
     const words = e.args.trim().toLowerCase().split(/\s+/).filter(Boolean)
     const arg = words.join(' ')
+    ensureTicking($)
     await ensureLang($, options)
     if (arg === 'off' || arg === 'on') {
       await update($, statusHidden, () => arg === 'off')
@@ -709,7 +734,9 @@ export const register: Register = (on, options) => {
     const printReport = async (all: boolean) => {
       await currentStrings($)
       const snap = await read($, snapshot)
-      return snap ? reportText(snap, await read($, agents), await $.clock.now(), all) : L.loading
+      if (snap) return reportText(snap, await read($, agents), await $.clock.now(), all)
+      const err = await read($, lastError)
+      return err ? `${L.title}\n${err}\n${L.retryHint}` : L.loading
     }
     if (words[0] === 'report') return { text: await printReport(words[1] === 'all') }
     const canDock = e.presentation.isFullscreen && e.presentation.columns >= DOCK_MIN_COLUMNS
@@ -724,6 +751,7 @@ export const register: Register = (on, options) => {
 
   on('turn.complete', async ($, e, next) => {
     const ran = await next(e)
+    ensureTicking($)
     void refresh($)
     return ran
   })
