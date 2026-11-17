@@ -366,15 +366,18 @@ test('on a narrow pane a status tag stays one line and the title gives way; no r
   on('env.get', (_$, e) => ({ value: e.name === 'LANG' ? 'zh_CN.UTF-8' : undefined }))
   on('agent.list', () => ({ value: [] }))
   await $.command.run(RUN)
-  // ~46 columns is where 待验证 used to wrap a character to a line.
-  for (const cols of [46, 30, 80]) {
+  // ~46 columns is where 待验证 used to wrap a character to a line; 20 is the narrowest pane.
+  // The harness hands back the tree, not a painted frame, so this guards the layout props that keep the row one line.
+  for (const cols of [46, 30, 20, 80]) {
     const ui = await $.ui.mount({ plugin: 'task', surface: 'terminal', component: 'Pane', requestId: 'task-dash', props: { ...PANE_PROPS, bodyColumns: cols } })
     // The pane re-reads by itself: no refresh button in the heading.
     expect(await ui.find({ key: 'refresh' })).toBeUndefined()
-    expect(await ui.find({ type: 'Button', text: /刷新/ })).toBeUndefined()
     for (const id of ['T-071', 'T-107']) {
       const tag = await ui.find({ key: `tag:${id}` })
       expect(tag?.props.flexShrink).toBe(0)
+      // Never wider than what the ID leaves: past that it truncates rather than spills out of the pane.
+      expect(tag?.props.width as number).toBeLessThanOrEqual(cols - 11)
+      expect(tag?.props.width as number).toBeGreaterThan(0)
       // The ID and priority keep their width too; only the title shrinks.
       expect((await ui.find({ key: `lead:${id}` }))?.props.flexShrink).toBe(0)
       const title = await ui.find({ key: `title:${id}` })
@@ -384,7 +387,33 @@ test('on a narrow pane a status tag stays one line and the title gives way; no r
     // The tag's text is whole, on one line.
     const tag = await ui.find({ key: 'tag:T-107' })
     expect(tag?.text).toContain(' 待验证 ')
+    // Wide enough for the whole tag (a space, then ` 待验证 `: 9 cells) at every width.
+    expect(tag?.props.width).toBe(9)
     expect(tag?.text).not.toContain('\n')
+    await ui.unmount()
+  }
+})
+
+test('a suffixed status keeps its suffix where it fits and drops it on a narrow pane', async ($, on) => {
+  const backlog = BACKLOG.replace('| T-107 | 日期炸弹改相对时间 | 测试 | 待验证 |', '| T-107 | 日期炸弹改相对时间 | 测试 | 待验证✗验证失败 |')
+  expect(backlog).not.toBe(BACKLOG)
+  const files: Record<string, string> = { ...FILES, '/proj/.claude/backlog.md': backlog }
+  on('session.cwd', () => ({ value: '/proj' }))
+  on('clock.now', () => ({ value: new Date(2026, 10, 15, 12, 0, 0).getTime() }))
+  on('fs.exists', (_$, e) => ({ value: e.path in files }))
+  on('fs.list', () => ({ value: [] }))
+  on('fs.read', (_$, e) => (files[e.path] === undefined ? { deny: 'ENOENT' } : { value: files[e.path]! }))
+  on('ui.open', () => ({ value: { isPlaced: true as const } }))
+  on('ui.status', () => ({ value: undefined }))
+  on('process.run', () => ({ deny: 'not macOS' }))
+  on('env.get', (_$, e) => ({ value: e.name === 'LANG' ? 'zh_CN.UTF-8' : undefined }))
+  on('agent.list', () => ({ value: [] }))
+  await $.command.run(RUN)
+  for (const [cols, suffixed] of [[80, true], [46, true], [30, false], [20, false]] as const) {
+    const ui = await $.ui.mount({ plugin: 'task', surface: 'terminal', component: 'Pane', requestId: 'task-dash', props: { ...PANE_PROPS, bodyColumns: cols } })
+    const tag = await ui.find({ key: 'tag:T-107' })
+    expect(tag?.text).toContain(' 待验证')
+    expect(tag?.text.includes('验证失败')).toBe(suffixed)
     await ui.unmount()
   }
 })

@@ -482,11 +482,11 @@ function Stat({ els, label, value, color, width }: { els: Els; label: string; va
  * shrinks: on a narrow pane the title gives way, not the tag (which would wrap
  * a character to a line and make the row several rows tall).
  */
-function StatusTag({ els, status, label, tagKey }: { els: Els; status: string; label: string; tagKey: string }) {
+function StatusTag({ els, status, label, tagKey, width }: { els: Els; status: string; label: string; tagKey: string; width: number }) {
   const { Box, Text } = els
   const color = STATUS_COLOR[status]
   return (
-    <Box key={tagKey} flexShrink={0}>
+    <Box key={tagKey} flexShrink={0} width={width}>
       <Text wrap="truncate-end">
         {' '}
         {color ? (
@@ -537,8 +537,18 @@ function CurrentCard({ els, snap, now }: { els: Els; snap: Snapshot; now: number
   )
 }
 
-function taskRow($: EngineInterface, els: Els, task: Task, isOpen: boolean, isCurrent: boolean) {
+/** Cells a status tag takes: a space before it and one either side of the label. */
+const tagCells = (label: string) => cellWidth(label) + 3
+
+/** Columns left to a task title once the row's fixed parts are drawn, below which a long status drops its suffix. */
+const MIN_TITLE_CELLS = 8
+
+function taskRow($: EngineInterface, els: Els, task: Task, isOpen: boolean, isCurrent: boolean, cols: number) {
   const { Box, Text, Button } = els
+  const leadCells = cellWidth(`${task.priority || '—'} ▸ ${task.id} `)
+  // A suffixed status (待验证✗验证失败) keeps only its name where the whole would leave the title no room.
+  const full = statusLabel(L, task.status, task.statusLabel)
+  const label = leadCells + tagCells(full) + MIN_TITLE_CELLS > cols ? statusLabel(L, task.status, '') : full
   const meta = [
     task.module || '—',
     task.deps && task.deps !== '—' ? L.deps(task.deps) : null,
@@ -562,7 +572,7 @@ function taskRow($: EngineInterface, els: Els, task: Task, isOpen: boolean, isCu
             {task.title}
           </Text>
         </Box>
-        <StatusTag els={els} tagKey={`tag:${task.id}`} status={task.status} label={statusLabel(L, task.status, task.statusLabel)} />
+        <StatusTag els={els} tagKey={`tag:${task.id}`} status={task.status} label={label} width={Math.max(0, Math.min(tagCells(label), cols - leadCells))} />
       </Box>
       {isOpen ? (
         <Box flexDirection="column" paddingLeft={4} marginBottom={1}>
@@ -630,6 +640,7 @@ async function drawPane($: EngineInterface, els: Els, cols: number) {
         {/* The pane re-reads every few seconds; a button is only worth its room while the first read has failed. */}
         {err ? (
           <Box>
+            {/* Keyed `refresh` as before: L.retryHint names its hotkey r. */}
             <Button key="refresh" hotkey="r" label={L.retry} onPress={() => refresh($)} />
           </Box>
         ) : null}
@@ -704,7 +715,7 @@ async function drawPane($: EngineInterface, els: Els, cols: number) {
         ))}
       </Box>
       {shown.length ? (
-        shown.map(t => taskRow($, els, t, opened === t.id, snap.current?.task === t.id))
+        shown.map(t => taskRow($, els, t, opened === t.id, snap.current?.task === t.id, cols))
       ) : (
         <Text dimColor>{L.noneInFilter}</Text>
       )}
