@@ -484,6 +484,14 @@ test('on a narrow pane a status tag stays one line and the title gives way; no r
     // Wide enough for the whole tag (a space, then ` 待验证 `: 9 cells) at every width.
     expect(tag?.props.width).toBe(9)
     expect(tag?.text).not.toContain('\n')
+    // Recent log: time and subject keep their width (no `11-15` over `11:32`, no `T-10` over `7`); only the detail truncates.
+    const leads = await ui.findAll({ key: 'lead' })
+    expect(leads.length).toBeGreaterThan(0)
+    for (const lead of leads) expect(lead.props.flexShrink).toBe(0)
+    for (const detail of await ui.findAll({ key: 'detail' })) {
+      expect(detail.props.flexShrink).toBe(1)
+      expect(detail.props.minWidth).toBe(0)
+    }
     await ui.unmount()
   }
 })

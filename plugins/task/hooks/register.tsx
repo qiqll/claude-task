@@ -884,9 +884,12 @@ async function drawPane($: EngineInterface, els: Els, cols: number) {
           .reverse()
           .map((e, i) => (
             <Box key={`event:${e.at}:${i}`}>
-              <Text dimColor>{e.time.slice(5, 16)} </Text>
-              <Text color={e.subject === 'STOP' ? 'error' : e.subject === 'START' ? 'success' : 'claude'}>{e.subject} </Text>
-              <Box flexGrow={1} flexShrink={1} minWidth={0}>
+              {/* Time and subject keep their width; only the detail gives way (truncated) on a narrow pane. */}
+              <Box key="lead" flexShrink={0}>
+                <Text dimColor>{e.time.slice(5, 16)} </Text>
+                <Text color={e.subject === 'STOP' ? 'error' : e.subject === 'START' ? 'success' : 'claude'}>{e.subject} </Text>
+              </Box>
+              <Box key="detail" flexGrow={1} flexShrink={1} minWidth={0}>
                 <Text wrap="truncate-end">
                   {e.subject === e.event ? e.detail : `${e.event} ${e.detail}`}
                 </Text>
