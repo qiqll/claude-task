@@ -2,6 +2,11 @@
 
 All notable changes to the `task` plugin. Versions follow [semver](https://semver.org/); the version in `plugins/task/.claude-plugin/plugin.json` is what Claude Code uses to detect updates.
 
+## 0.3.2 — 2026-11-17
+
+- Pane and status line show subagents this session runs while no loop task does (`Idle · 1 subagent running`), so direct work no longer reads as idle; a subagent whose stop event never arrives is settled from the engine's agent list (T-009).
+- After a plugin update or reload the status line is rewritten from the current pool instead of keeping the old instance's snapshot; a failed or timed-out first read shows the error and a retry hint instead of an endless "Loading task pool…", and the status line flags it with ⚠; the refresh timer restarts from any hook, not only session start (T-008).
+
 ## 0.3.1 — 2026-11-17
 
 - Docs: English README (default) with Chinese version in `README.zh-CN.md`; new "Why", guardrails, quick start and "Update" sections.
