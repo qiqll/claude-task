@@ -2,6 +2,10 @@
 
 All notable changes to the `task` plugin. Versions follow [semver](https://semver.org/); the version in `plugins/task/.claude-plugin/plugin.json` is what Claude Code uses to detect updates.
 
+## 0.3.5 — 2026-11-17
+
+- Recent log on a narrow pane: the date-time and task ID keep their width on one line; only the detail is truncated (long `DONE→待验证` rows used to wrap the time and ID onto two lines).
+
 ## 0.3.4 — 2026-11-17
 
 - Task rows on a narrow pane (T-011): the status tag keeps one line at its full width and the title is truncated instead, so each row stays one line tall; a suffixed status drops its suffix where it does not fit. The header's refresh button is gone (the pane refreshes every 5s); a retry button and `r` remain only on the first-read error screen.
