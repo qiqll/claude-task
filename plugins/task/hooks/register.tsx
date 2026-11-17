@@ -20,6 +20,8 @@ const filter = atom({ plugin: 'task', key: 'filter' } as const, 'active')
 const openTask = atom({ plugin: 'task', key: 'openTask' } as const, null)
 const agents = atom({ plugin: 'task', key: 'agents' } as const, [])
 const statusHidden = atom({ plugin: 'task', key: 'statusHidden' } as const, false)
+/** Start of this session's main turn (user prompt to answer); null between turns. */
+const busySince = atom({ plugin: 'task', key: 'busySince' } as const, null)
 /** Clock of the last read; ticks while a task runs so elapsed times move without rewriting the snapshot. */
 const nowAtom = atom({ plugin: 'task', key: 'now' } as const, 0)
 const lastError = atom({ plugin: 'task', key: 'error' } as const, null)
@@ -173,19 +175,22 @@ function signatureOf(root: string | null, files: PoolFiles): string {
 }
 
 /**
- * Work outside the loop: subagents this session runs while no loop task does, so
- * the dashboard does not read 空闲 with work under way. A running loop's own
- * worker is already the current task.
+ * Work outside the loop: this session's main turn and the subagents it runs while
+ * no loop task does, so the dashboard does not read 空闲 with work under way. A
+ * running loop's own dispatcher and worker are already the current task. Where no
+ * pool is set up the busy session goes unsaid: every turn of every project would
+ * otherwise light up the status line.
  */
-function directWork(snap: Snapshot, agentList: AgentRow[]): string | undefined {
+function directWork(snap: Snapshot, agentList: AgentRow[], busy: number | null): string | undefined {
   if (snap.loop === 'running' || snap.loop === 'waiting') return undefined
   const running = agentList.filter(a => a.status === 'running' && !parked.has(a.id)).length
-  return running ? L.directAgents(running) : undefined
+  const parts = [busy !== null && snap.initialized ? L.sessionBusy : null, running ? L.directAgents(running) : null]
+  return parts.filter(Boolean).join(' · ') || undefined
 }
 
-function statusLine(snap: Snapshot, agentList: AgentRow[], now: number): string | undefined {
+function statusLine(snap: Snapshot, agentList: AgentRow[], busy: number | null, now: number): string | undefined {
   const loopText = L.loop[snap.loop]
-  const direct = directWork(snap, agentList)
+  const direct = directWork(snap, agentList, busy)
   if (!snap.initialized) return direct ? `${L.title} ● ${direct}` : undefined
   const c = snap.counts
   const cur = snap.current
@@ -205,7 +210,7 @@ function statusLine(snap: Snapshot, agentList: AgentRow[], now: number): string 
 const REPORT_TASKS = 15
 
 /** The whole dashboard as plain text: printed into the transcript where no pane can dock. */
-function reportText(snap: Snapshot, agentList: AgentRow[], now: number, all: boolean): string {
+function reportText(snap: Snapshot, agentList: AgentRow[], busy: number | null, now: number, all: boolean): string {
   if (!snap.initialized) return `${L.title}\n${L.noPool}\n${L.runInit}`
   const out: string[] = []
   const name = snap.root?.split(/[\\/]/).filter(Boolean).pop() ?? ''
@@ -215,7 +220,7 @@ function reportText(snap: Snapshot, agentList: AgentRow[], now: number, all: boo
         .filter(Boolean)
         .join(' · ')
     : ''
-  const direct = directWork(snap, agentList)
+  const direct = directWork(snap, agentList, busy)
   out.push(`${L.title} [${name}] ● ${L.loop[snap.loop]}${snap.stopRequested && snap.loop === 'running' ? L.stopAfter : ''}${snap.loop === 'stale' ? L.staleHint : ''}${direct ? ` · ${direct}` : ''}`)
   if (session) out.push(session)
   const cur = snap.current
@@ -279,8 +284,8 @@ let lastStatus: string | undefined = '\u0000'
 
 async function showStatus($: EngineInterface, snap: Snapshot | null, now: number) {
   await currentStrings($)
-  const [hidden, agentList, err] = await Promise.all([read($, statusHidden), read($, agents), read($, lastError)])
-  let text = snap && !hidden ? statusLine(snap, agentList, now) : undefined
+  const [hidden, agentList, busy, err] = await Promise.all([read($, statusHidden), read($, agents), read($, busySince), read($, lastError)])
+  let text = snap && !hidden ? statusLine(snap, agentList, busy, now) : undefined
   // A failed read says so rather than passing off the last snapshot as current.
   if (err && !hidden) text = `${text ?? L.title} · ⚠ ${L.readFailed}`
   if (text !== lastStatus) {
@@ -368,6 +373,16 @@ function refresh($: EngineInterface): Promise<void> {
   })()
   refreshing = run
   return run
+}
+
+/**
+ * Marks this session's main turn begun (its start time) or over (null); the main
+ * turn only: a subagent's run raises no turn.start and its turn.complete carries agentId.
+ */
+async function setBusy($: EngineInterface, value: number | null) {
+  if ((await read($, busySince)) === value) return
+  await update($, busySince, () => value)
+  await showStatus($, await read($, snapshot), await $.clock.now())
 }
 
 // ---------------------------------------------------------------- agents
@@ -685,10 +700,11 @@ async function drawPane($: EngineInterface, els: Els, cols: number) {
   await currentStrings($)
   const snap = await read($, snapshot)
   const err = await read($, lastError)
-  const direct = snap ? directWork(snap, await read($, agents)) : undefined
+  const direct = snap ? directWork(snap, await read($, agents), await read($, busySince)) : undefined
+  // One wrapping line: on a narrow pane the work under way folds onto the next row instead of being cut.
   const header = (
     <Box>
-      <Box flexGrow={1}>
+      <Text wrap="wrap">
         <Text bold>{L.title} </Text>
         {snap?.root ? <Text dimColor>[{snap.root.split(/[\\/]/).filter(Boolean).pop() ?? snap.root}] </Text> : null}
         {snap ? (
@@ -699,7 +715,7 @@ async function drawPane($: EngineInterface, els: Els, cols: number) {
           </Text>
         ) : null}
         {direct ? <Text color="claude"> · {direct}</Text> : null}
-      </Box>
+      </Text>
     </Box>
   )
 
@@ -876,6 +892,8 @@ async function drawPane($: EngineInterface, els: Els, cols: number) {
 export const register: Register = (on, options) => {
   on('session.start', async ($, e, next) => {
     await ensureLang($, options, { force: true, quick: true })
+    // A turn cut off with no turn.complete (the process ended) must not leave 会话执行中 standing.
+    await update($, busySince, () => null)
     await $.command.register({
       name: 'task-dash',
       description: L.cmdDescription,
@@ -901,7 +919,7 @@ export const register: Register = (on, options) => {
     const printReport = async (all: boolean) => {
       await currentStrings($)
       const snap = await read($, snapshot)
-      if (snap) return reportText(snap, await read($, agents), await $.clock.now(), all)
+      if (snap) return reportText(snap, await read($, agents), await read($, busySince), await $.clock.now(), all)
       const err = await read($, lastError)
       return err ? `${L.title}\n${err}\n${L.retryHint}` : L.loading
     }
@@ -916,7 +934,15 @@ export const register: Register = (on, options) => {
     return { text: canDock ? L.openedDock : L.openedInline }
   })
 
+  on('turn.start', async ($, e, next) => {
+    ensureTicking($)
+    await setBusy($, await $.clock.now())
+    return next(e)
+  }).catch(($, e, next) => next(e))
+
   on('turn.complete', async ($, e, next) => {
+    // Cleared before the answer settles: the next prompt starts its own turn.
+    if (!e.agentId) await setBusy($, null).catch(() => undefined)
     const ran = await next(e)
     ensureTicking($)
     void refresh($)

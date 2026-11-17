@@ -230,6 +230,96 @@ test('direct subagents show while no loop runs, and a missed stop does not stick
   expect(statuses.at(-1)).not.toContain('子代理')
 })
 
+test('the main session at work reads 空闲 · 会话执行中 until its turn ends; a subagent turn ending does not clear it', async ($, on) => {
+  const statuses: (string | undefined)[] = []
+  let agentStatus = 'running'
+  const idle = { ...FILES }
+  // No loop at all: the AI works straight from the conversation.
+  delete idle['/proj/.claude/auto/current']
+  delete idle['/proj/.claude/auto/run.log']
+  on('session.cwd', () => ({ value: '/proj' }))
+  on('clock.now', () => ({ value: new Date(2026, 10, 15, 12, 0, 0).getTime() }))
+  on('fs.exists', (_$, e) => ({ value: e.path in idle }))
+  on('fs.list', () => ({ value: [] }))
+  on('fs.read', (_$, e) => (idle[e.path] === undefined ? { deny: 'ENOENT' } : { value: idle[e.path]! }))
+  on('ui.open', () => ({ value: { isPlaced: true as const } }))
+  on('process.run', () => ({ deny: 'not macOS' }))
+  on('env.get', (_$, e) => ({ value: e.name === 'LANG' ? 'zh_CN.UTF-8' : undefined }))
+  on('agent.list', () => ({ value: [{ id: 'a1', description: 'review diff', type: 'code-reviewer', status: agentStatus as 'running' }] }))
+  on('classic.SubagentStart', () => ({}))
+  on('turn.start', (_$, e) => ({ turnId: e.turnId }))
+  on('turn.complete', () => ({ text: '' }))
+  on('session.start', (_$, e) => ({ cwd: e.cwd }))
+  on('command.register', () => ({ value: undefined }))
+  on('clock.every', () => ({ value: { cancel: () => undefined } }))
+  on('ui.status', (_$, e) => {
+    statuses.push(e.text)
+    return { value: undefined }
+  })
+  const done = { answer: '', durationMs: 1000, isAborted: false, turnId: 't1', reason: 'answer' as const }
+  await $.command.run(RUN)
+  expect(statuses.at(-1)).toContain('● 空闲 ·')
+  expect(statuses.at(-1)).not.toContain('会话执行中')
+  // The user's prompt is being worked on, no subagent sent.
+  await $.turn.start({ text: '帮我改一下', turnId: 't1' })
+  expect(statuses.at(-1)).toContain('● 空闲 · 会话执行中')
+  const ui = await $.ui.mount({ plugin: 'task', surface: 'terminal', component: 'Pane', requestId: 'task-dash', props: { ...PANE_PROPS, bodyColumns: 46 } })
+  expect(await ui.find({ type: 'Text', text: /● 空闲/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: / · 会话执行中$/ })).toBeDefined()
+  // The subagents section still says none were sent.
+  expect(await ui.find({ type: 'Text', text: /本会话还没有派发子代理/ })).toBeDefined()
+  expect((await $.command.run({ ...RUN, args: 'report' }))?.text).toContain('● 空闲 · 会话执行中')
+  // Then it sends one: both show, in the status line, the header and the subagents section.
+  await $.classic.SubagentStart({ agent_id: 'a1', agent_type: 'code-reviewer' })
+  expect(statuses.at(-1)).toContain('● 空闲 · 会话执行中 · 子代理 1 个运行中')
+  expect(await ui.find({ type: 'Text', text: / · 会话执行中 · 子代理 1 个运行中$/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /review diff/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /1 运行中/ })).toBeDefined()
+  // The subagent's own turn ending is not the session's.
+  await $.turn.complete({ ...done, turnId: 'sub', agentId: 'a1' })
+  expect(statuses.at(-1)).toContain('会话执行中')
+  // The main turn ends while the subagent runs on.
+  await $.turn.complete(done)
+  expect(statuses.at(-1)).not.toContain('会话执行中')
+  expect(statuses.at(-1)).toContain('● 空闲 · 子代理 1 个运行中')
+  expect(await ui.find({ type: 'Text', text: /会话执行中/ })).toBeUndefined()
+  agentStatus = 'completed'
+  await $.command.run({ ...RUN, args: 'report' })
+  expect(statuses.at(-1)).not.toContain('子代理')
+  await ui.unmount()
+  // A turn cut off without turn.complete is not carried into the next session.
+  await $.turn.start({ text: '', turnId: 't2' })
+  expect(statuses.at(-1)).toContain('会话执行中')
+  await $.session.start({ cwd: '/proj', surface: 'terminal', isInteractive: true })
+  await $.command.run({ ...RUN, args: 'report' })
+  expect(statuses.at(-1)).not.toContain('会话执行中')
+})
+
+test('a running loop already names its work, and a project without a pool says nothing of a busy session', async ($, on) => {
+  const statuses: (string | undefined)[] = []
+  let files: Record<string, string> = FILES
+  on('session.cwd', () => ({ value: '/proj' }))
+  on('clock.now', () => ({ value: new Date(2026, 10, 15, 12, 0, 0).getTime() }))
+  on('fs.exists', (_$, e) => ({ value: e.path in files }))
+  on('fs.list', () => ({ value: [] }))
+  on('fs.read', (_$, e) => (files[e.path] === undefined ? { deny: 'ENOENT' } : { value: files[e.path]! }))
+  on('ui.open', () => ({ value: { isPlaced: true as const } }))
+  on('process.run', () => ({ deny: 'not macOS' }))
+  on('env.get', (_$, e) => ({ value: e.name === 'LANG' ? 'zh_CN.UTF-8' : undefined }))
+  on('turn.start', (_$, e) => ({ turnId: e.turnId }))
+  on('ui.status', (_$, e) => {
+    statuses.push(e.text)
+    return { value: undefined }
+  })
+  await $.command.run(RUN)
+  await $.turn.start({ text: '/task:loop tick', turnId: 't1' })
+  expect(statuses.at(-1)).toContain('T-071')
+  expect(statuses.at(-1)).not.toContain('会话执行中')
+  files = {}
+  await $.command.run({ ...RUN, args: 'report' })
+  expect(statuses.at(-1)).toBeUndefined()
+})
+
 test('a subagent dropped from the engine list without a stop is settled, even when the pool read fails', async ($, on) => {
   const statuses: (string | undefined)[] = []
   let t = new Date(2026, 10, 15, 12, 0, 0).getTime()

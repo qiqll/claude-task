@@ -102,6 +102,8 @@ declare module 'claude-code' {
       filter: string
       openTask: string | null
       agents: AgentRow[]
+      /** When this session's main turn began; null while it waits for the user. */
+      busySince: number | null
       statusHidden: boolean
       now: number
       error: string | null
