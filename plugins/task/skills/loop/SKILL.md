@@ -9,7 +9,7 @@ argument-hint: "[max=N 最多任务数，默认 10] [hours=N 最长时长，默�
 
 你是调度员，运行在需求方开着的主会话里。**你自己不写业务代码、不读大段 diff**，只做五件事：读状态、派 worker、验收、写状态、跟需求方说话。所有状态落在文件里，会话随时可以断，一句「继续」就能从文件恢复。
 
-`$SK` = `${CLAUDE_PLUGIN_ROOT}/skills/loop`（含 `verify_tests.sh`、`check_test_weakening.sh`）。
+`$SK` = `${CLAUDE_PLUGIN_ROOT}/skills/loop`（含 `verify_tests.sh`、`check_test_weakening.sh`、`worker_progress.sh`）。
 
 | 文件 | 谁写 | 作用 |
 |------|------|------|
@@ -19,7 +19,7 @@ argument-hint: "[max=N 最多任务数，默认 10] [hours=N 最长时长，默�
 | `.claude/auto/run.log` | 调度员 | 每任务一行运行流水 |
 | `.claude/auto/STOP` | 需求方 / 调度员 | 存在 = 当前任务做完后停机 |
 
-**`current` 字段**：`task=T-0NN` `nonce=<8位随机hex>` `phase=<见下>` `start_sha=` `dirty=<开工时 git status --porcelain 的路径，逗号分隔>` `started=<epoch>` `worker=worker-T-0NN` `output=<output 文件路径>` `run_started=<本次 /task:loop 启动 epoch>` `max=` `hours=` `done=<本次已交付数>` `noprog=<连续无进展数>`。
+**`current` 字段**：`task=T-0NN` `nonce=<8位随机hex>` `phase=<见下>` `start_sha=` `dirty=<开工时 git status --porcelain 的路径，逗号分隔>` `started=<epoch>` `worker=worker-T-0NN` `output=<output 文件路径>` `nudged=<看门狗催促时间 epoch，未催促则无此行>` `watch_ok=<看门狗判定正常的时间 epoch，同上>` `run_started=<本次 /task:loop 启动 epoch>` `max=` `hours=` `done=<本次已交付数>` `noprog=<连续无进展数>`。
 没有 current 时，`run_started/max/hours/done/noprog` 记在 `.claude/auto/session`（同格式），派发时拷进 current。
 
 **phase 状态机**：`running` →（报告到达）`accepting` →（结论已定）`accepted` →（backlog 已提交）删除 current。另有 `review_pending`（等 worker 按代审查结果修复）、`halted`（需求方喊立刻停）。
@@ -101,7 +101,7 @@ argument-hint: "[max=N 最多任务数，默认 10] [hours=N 最长时长，默�
 | `NEEDS_DECISION` | 结论 `待决策`，`DECISION` 原文写进待决策表 |
 | `BLOCKED` | 结论 `阻塞`，依赖列写原因；需人工操作的在「人工阻塞事项」开 `H-NNN` |
 | `BASELINE_RED` | 结论 `阻塞`（基线红：用例名）；把「修复基线 <用例>」作为衍生任务录入，优先级同本任务（计 1 层衍生）。noprog+1 |
-| `FAILED` / 超时 / 无报告 | **先分辨是不是基础设施中断**：worker 以 API 错误 / 连接重置 / 限流等 `failureReason` 停下且没交报告 → 不算任务失败：核对 `<start>..HEAD` 与遗留文件后，用 SendMessage 让同一个 worker 从断点续做（同一 nonce），每个任务最多续 2 次，`phase` 保持 `running`；第 3 次仍中断才按 FAILED 处理。其余情况见下方「回滚」。备注追加「自动失败×N：原因」；N≥2 → `阻塞`，否则回 `待开始`（下次派发带上失败原因）。noprog+1 |
+| `FAILED` / 超时 / 停滞 / 无报告 | **先分辨是不是基础设施中断**：worker 以 API 错误 / 连接重置 / 限流等 `failureReason` 停下且没交报告 → 不算任务失败：核对 `<start>..HEAD` 与遗留文件后，用 SendMessage 让同一个 worker 从断点续做（同一 nonce），每个任务最多续 2 次，`phase` 保持 `running`；第 3 次仍中断才按 FAILED 处理。其余情况见下方「回滚」。备注追加「自动失败×N：原因」；N≥2 → `阻塞`，否则回 `待开始`（下次派发带上失败原因）。noprog+1 |
 | `GATE_PENDING_REVIEW` | worker 派不了子 agent：写 `phase=review_pending`，你派 `code-reviewer`（没有该 agent 时用 `general-purpose` 子 agent 做只读审查）审 `<start>..HEAD`，把发现用 SendMessage 发给 `worker-T-0NN`，让它按 /task:auto Step 4 第 2 步继续并重新返回报告（同一 nonce）。结束回合等通知 |
 
 **回滚**（只在 FAILED 类结论时）：
@@ -138,9 +138,29 @@ argument-hint: "[max=N 最多任务数，默认 10] [hours=N 最长时长，默�
   - `phase=halted` → 静默。
   - `phase=running/review_pending` → 用 `grep -c "NONCE: <nonce>" <output>` 判断报告是否已产出（口令只出现在 worker 的报告里，派发 prompt 用的是「报告口令：」，模板里是占位符，不会误中）。
     - 已产出 → 从 output 提取该报告块，进 C（C0 闸门会挡掉已被处理过的）。
-    - 未产出：开工 < 3 小时 → 静默；≥ 3 小时 → TaskStop 该 worker，按 `FAILED（超时）` 进 C。
+    - 未产出：开工 ≥ 3 小时 → TaskStop 该 worker，按 `FAILED（超时）` 进 C。否则 `phase=running` 时走下面的**看门狗**；`review_pending` 不走（worker 在等审查结果，output 本来就不动）。
 - 无 current → inbox 有新文件或池里有可派任务 → 进 B；否则静默。
 - 无事发生时只输出一行。
+
+### 看门狗：worker 还在推进吗
+
+进程活着不等于有进展：worker 可能卡在一个挂起的命令上，也可能反复试同一个修法。每次心跳跑 `bash $SK/worker_progress.sh .claude/auto/current`（只看文件时间戳，不读 transcript）：
+
+| 输出 | 含义 | 你做 |
+|------|------|------|
+| `OK …` | output 在增长、工作区在变 | 静默 |
+| `IDLE …` | output ≥ 30 分钟没写入：卡在某一步或已挂 | 见下 |
+| `SPIN …` | output 在写，但工作区 ≥ 60 分钟没变（无新提交、无文件改动）：可能原地打转 | 见下 |
+| 退出码 2 | current 字段坏了 | 静默；run.log 记一条 WATCHDOG 行写明检测失败原因，等 3 小时超时兜底 |
+
+`IDLE` / `SPIN` 时：
+1. current 有 `watch_ok`，且距今 < 60 分钟 → 静默（上次已判定为正常的长步骤）。
+2. 没有 `nudged` → 看 `tail -c 6000 <output>`（只看这一段），判断：
+   - 正常的长步骤（例如测试套件在跑、读大文件、子 agent 审查中）→ current 写 `watch_ok=<now>`，静默。
+   - 在重复同一类工具调用 / 同一个报错，或在做与任务无关的事 → SendMessage 给 `worker-T-0NN`：「看门狗：你已 <out/tree 分钟> 没有实质进展，最近在 <一句话概括>。换个思路；若确实做不下去，按 /task:auto 返回 `BLOCKED` 或 `NEEDS_DECISION` 报告（同一口令）。」current 写 `nudged=<now>`。
+   - 两种情况都在 `run.log` 追加 `<时间> | T-0NN | WATCHDOG | <脚本输出> | <正常/已催促>`。
+3. 已有 `nudged`，距今 ≥ 40 分钟仍是 `IDLE` / `SPIN` → TaskStop 该 worker，按 `FAILED（停滞：<脚本输出>）` 进 C。距今不足 40 分钟 → 静默。
+4. 脚本恢复 `OK` 时删掉 `nudged` / `watch_ok` 行，下次停滞重新计数。
 
 ## 需求方在会话里说话时
 

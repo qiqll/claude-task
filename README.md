@@ -36,6 +36,7 @@ Dump requirements into a backlog and walk away. A dispatcher hands each task to 
 
 - **Doesn't trust the worker's word.** A task counts as done only after the dispatcher re-runs the tests itself.
 - **Catches weakened tests.** Deleted cases, new skips and fewer assertions are detected automatically.
+- **Notices a stuck worker.** The heartbeat checks whether the worker is still writing output and still changing the repo. A worker that stalls is nudged once, then stopped and handled as a failure, instead of waiting for the 3-hour timeout.
 - **Asks first on high-risk choices.** Schema/migrations, auth/crypto, billing, data deletion, public APIs, deployment and dependencies: if there's more than one way to do it, it stops and lets you decide.
 - **Rolls back failures.** Failed changes are reverted and kept under `refs/auto-failed/*` for review. A task that fails twice is marked blocked.
 - **Stays off main and never pushes.** It stops on a `STOP` file, when the task or time budget runs out, or after three rounds without progress.
