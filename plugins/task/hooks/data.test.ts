@@ -165,6 +165,16 @@ describe('wrapping', () => {
       expect(line.endsWith('（')).toBe(false)
     }
     expect(wrapCells('短', 10)).toEqual(['短'])
+    expect(wrapCells('a\tb\nc', 10)).toEqual(['a b c'])
     expect(wrapCells('', 10)).toEqual([''])
+  })
+
+  test('emoji and CJK beyond the BMP take two cells and break like CJK', () => {
+    expect(cellWidth('𠮷')).toBe(2)
+    expect(cellWidth('✅')).toBe(2)
+    expect(cellWidth('😀')).toBe(2)
+    expect(cellWidth('⚠')).toBe(1)
+    expect(wrapCells('𠮷𠮷𠮷𠮷𠮷𠮷', 6)).toEqual(['𠮷𠮷𠮷', '𠮷𠮷𠮷'])
+    for (const line of wrapCells('修复✅完成任务😀好', 11)) expect(cellWidth(line)).toBeLessThanOrEqual(11)
   })
 })

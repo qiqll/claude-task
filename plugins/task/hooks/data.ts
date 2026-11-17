@@ -431,7 +431,8 @@ export function taskIdIn(text: string): string | null {
   return /\bT-\d{3,}\b/.exec(text)?.[0] ?? null
 }
 
-const WIDE = /[\u1100-\u115f\u2e80-\ua4cf\uac00-\ud7a3\uf900-\ufaff\ufe30-\ufe4f\uff00-\uff60\uffe0-\uffe6]/
+/** Two-cell characters: CJK, fullwidth forms, the emoji drawn as emoji by default, and CJK beyond the BMP. */
+const WIDE = /[\u1100-\u115f\u2e80-\ua4cf\uac00-\ud7a3\uf900-\ufaff\ufe30-\ufe4f\uff00-\uff60\uffe0-\uffe6\u231a-\u231b\u23e9-\u23ec\u23f0\u23f3\u25fd-\u25fe\u2614-\u2615\u2648-\u2653\u267f\u2693\u26a1\u26aa-\u26ab\u26bd-\u26be\u26c4-\u26c5\u26ce\u26d4\u26ea\u26f2-\u26f3\u26f5\u26fa\u26fd\u2705\u270a-\u270b\u2728\u274c\u274e\u2753-\u2755\u2757\u2795-\u2797\u27b0\u27bf\u2b1b-\u2b1c\u2b50\u2b55\u{1f300}-\u{1faff}\u{20000}-\u{3fffd}]/u
 /** Punctuation that never starts a line (it stays with the character before it). */
 const NO_LINE_START = /^[，。、；：！？）」』》〉】,.;:!?)\]}%]/
 /** Punctuation that never ends a line (it goes down with the character after it). */
@@ -452,10 +453,12 @@ export function cellWidth(text: string): number {
  * line before, opening punctuation goes down with what it opens.
  */
 export function wrapCells(text: string, width: number): string[] {
+  // Below two cells not even one CJK character fits: leave it to the host.
   if (width < 2) return [text]
   // Units that never split: one CJK character, one space, or a run of anything else.
+  // Tabs and line breaks count as spaces: callers pass one line each.
   const units: string[] = []
-  for (const ch of text) {
+  for (const ch of text.replace(/\s/g, ' ')) {
     const last = units.at(-1)
     if (ch !== ' ' && !WIDE.test(ch) && last !== undefined && last !== ' ' && !WIDE.test(last.at(-1)!)) units[units.length - 1] = last + ch
     else units.push(ch)
