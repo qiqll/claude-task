@@ -2,6 +2,13 @@
 
 All notable changes to the `task` plugin. Versions follow [semver](https://semver.org/); the version in `plugins/task/.claude-plugin/plugin.json` is what Claude Code uses to detect updates.
 
+## 0.3.4 — 2026-11-17
+
+- Task rows on a narrow pane (T-011): the status tag keeps one line at its full width and the title is truncated instead, so each row stays one line tall; a suffixed status drops its suffix where it does not fit. The header's refresh button is gone (the pane refreshes every 5s); a retry button and `r` remain only on the first-read error screen.
+- Expanded task details (T-012): a framed card like the current task, with the full title, then module / deps / derived from / acceptance / notes in an aligned label column; notes are split one per line and the acceptance clause is not repeated.
+- Direct work shows (T-009): with no loop running, while the main session is handling a turn the status line, pane header and report read `Idle · session working` (中文「空闲 · 会话执行中」), alongside any running subagents; it clears when the turn ends, is interrupted or errors.
+- Chinese UI: the `WIP` metric is now 「进行中」 and the Agent section is 「子代理」.
+
 ## 0.3.3 — 2026-11-17
 
 - Pane restyled (T-010): the current task sits in a framed card; metrics are framed tiles, four to a row where each tile fits its longest label, plain text otherwise; task statuses are filled colour tags; section headings use the accent colour.
