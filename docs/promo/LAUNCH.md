@@ -2,20 +2,16 @@
 
 按顺序做。前 4 步做完之前不要发帖，否则用户点进来会看到缺图或打不开的页面。
 
-## 1. 合并并推送
+## 1–3. 一键发布（已合并到 main 并打好 tag v0.3.1，只差推送）
 
 ```sh
-git switch main && git merge --ff-only release/0.3.1
-git tag v0.3.1 && git push origin main v0.3.1
+gh auth login                 # gh 的 token 已失效，先重新登录
+docs/promo/publish.sh         # 推送 main+tag、设置 About/topics、开启 Pages、创建 Release；可重复执行
 ```
 
-## 2. 修复 gh 登录（可选，后面几步会用到）
+网络不通时（GitHub 连不上），先确认代理能访问 github.com 再执行。下面第 3 节是脚本做的事情的手工版本，供核对；只有 Social preview 必须手工上传。
 
-```sh
-gh auth login
-```
-
-## 3. GitHub 仓库设置
+## 3. GitHub 仓库设置（publish.sh 已覆盖，除 Social preview 外）
 
 - **确认仓库是 Public。**
 - **About**（仓库首页右上角齿轮）：
