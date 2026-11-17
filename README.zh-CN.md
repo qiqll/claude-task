@@ -12,6 +12,8 @@
 /plugin install task --marketplace qiqll/claude-task
 ```
 
+<img src="docs/promo/assets/x-zh-1-hero.png" alt="claude-task：需求进任务池，交付经过审查和测试验证的提交" width="820">
+
 <!-- Uncomment after adding docs/assets/demo.gif / 加入 GIF 后取消注释
 <img src="docs/assets/demo.gif" alt="claude-task 演示：录入需求、自动循环、面板实时更新" width="820">
 -->
@@ -28,6 +30,8 @@
 
 **4. 进度一目了然。** 右侧面板和输入框下方的状态行实时显示正在做什么、做完了什么、还剩什么、等你决定什么。任务进入待验证、待决策或阻塞状态时会弹提醒。完成率、一次通过率和中位周期也一并给出。
 
+<p align="center"><img src="docs/promo/assets/x-zh-3-flow.png" alt="工作流程：口语需求、规范工单、后台 worker、审查门禁、调度员重跑测试、待验证" width="820"></p>
+
 ### 敢放手，是因为有护栏
 
 - **不信 worker 自述**：调度员亲自重跑测试，才算完成。
@@ -35,6 +39,8 @@
 - **高风险领域先问你**：schema/迁移、认证/加密、计费、删数据、对外 API、部署、依赖，只要有多种做法就停下来让你决定。
 - **失败自动回滚**：失败的改动会回滚，并保留在 `refs/auto-failed/*` 供你复盘；同一任务失败两次转为阻塞。
 - **不碰 main、从不 push**：遇到 `STOP` 文件、任务数或时长预算用完、连续三轮无进展，任一条件触发就停机。
+
+<p align="center"><img src="docs/promo/assets/x-zh-4-guardrails.png" alt="五道护栏" width="820"></p>
 
 > 一个典型用法：下班前把攒下的需求丢进去，运行 `/task:loop`；第二天早上收一批「待验证」，处理几条「待决策」。
 
@@ -106,6 +112,8 @@ qtask -h
 不装也行：在调度会话里直接说「加个任务：…」「T-0NN 选 A」，效果相同。
 
 ## 面板与状态行
+
+<p align="center"><img src="docs/promo/assets/x-zh-2-panel.png" alt="演示任务池上的 /task-dash report：当前任务、指标、任务列表、待决策、人工阻塞、最近流水" width="820"></p>
 
 | 位置 | 内容 | 操作 |
 |---|---|---|

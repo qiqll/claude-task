@@ -12,6 +12,8 @@ Dump requirements into a backlog and walk away. A dispatcher hands each task to 
 /plugin install task --marketplace qiqll/claude-task
 ```
 
+<img src="docs/promo/assets/x-1-hero.png" alt="claude-task: backlog in, reviewed and test-verified commits out" width="820">
+
 <!-- Uncomment after adding docs/assets/demo.gif / 加入 GIF 后取消注释
 <img src="docs/assets/demo.gif" alt="claude-task demo: add requests, run the loop, watch the pane update" width="820">
 -->
@@ -28,6 +30,8 @@ Dump requirements into a backlog and walk away. A dispatcher hands each task to 
 
 **4. Everything visible at a glance.** A side pane and a status line show what's running, what's done, what's left and what's waiting on you. Toasts fire when a task needs verification or a decision, or gets blocked. Completion rate, first-pass rate and median cycle time are included.
 
+<p align="center"><img src="docs/promo/assets/x-3-flow.png" alt="How it works: request, ticket, worker, review gate, dispatcher re-runs tests, to verify" width="820"></p>
+
 ### Guardrails that let you walk away
 
 - **Doesn't trust the worker's word.** A task counts as done only after the dispatcher re-runs the tests itself.
@@ -35,6 +39,8 @@ Dump requirements into a backlog and walk away. A dispatcher hands each task to 
 - **Asks first on high-risk choices.** Schema/migrations, auth/crypto, billing, data deletion, public APIs, deployment and dependencies: if there's more than one way to do it, it stops and lets you decide.
 - **Rolls back failures.** Failed changes are reverted and kept under `refs/auto-failed/*` for review. A task that fails twice is marked blocked.
 - **Stays off main and never pushes.** It stops on a `STOP` file, when the task or time budget runs out, or after three rounds without progress.
+
+<p align="center"><img src="docs/promo/assets/x-4-guardrails.png" alt="Five guardrails" width="820"></p>
 
 > A typical day: before logging off, dump your pending requests and run `/task:loop`. Next morning, review a batch of tasks in "to verify" and answer a few decisions.
 
@@ -106,6 +112,8 @@ qtask -h
 You can skip it: saying "add a task: …" or "T-0NN pick A" in the dispatcher session does the same thing.
 
 ## Pane and status line
+
+<p align="center"><img src="docs/promo/assets/x-2-panel.png" alt="/task-dash report on a demo task pool: current task, metrics, tasks, decisions, human blockers, recent log" width="820"></p>
 
 | Where | Shows | Controls |
 |---|---|---|

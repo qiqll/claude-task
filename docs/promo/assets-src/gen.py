@@ -63,6 +63,18 @@ cards = f'''
 <p class=note>Add tasks any time — in the chat, or <code>qtask "…"</code> from any terminal. The running task is never interrupted.</p>{foot}</section>
 
 <section id="x-4-guardrails" class="card x"><div class=k>Why you can walk away</div><h2>Five <em>guardrails</em></h2>{rails(G_EN)}{foot}</section>
+
+<section id="x-zh-1-hero" class="card x"><div class=split><div><div class=k>Claude Code 插件 · 开源</div>
+<h1>让 Claude Code<br>自己<em>加班</em></h1><p class=sub>需求一股脑丢进任务池就去睡觉。后台 agent 逐个交付，测试由调度员亲自重跑才算完成。</p>
+<div class=cmd sm>› {CMD}</div></div>{term('zh_CN.UTF-8','mini')}</div>{foot}</section>
+
+<section id="x-zh-2-panel" class="card x"><div class=k>进度一目了然</div><h2>正在做什么、做完什么、还有什么<em>等你拍板</em></h2>
+{term('zh_CN.UTF-8','wide')}{demo_zh}{foot}</section>
+
+<section id="x-zh-3-flow" class="card x"><div class=k>按工程标准交付</div><h2>每个需求都是一张<em>工单</em></h2>{flow(FLOW_ZH)}
+<p class=note>随时加需求：在会话里说，或在任意终端 <code>qtask "…"</code>。正在做的任务不会被打断。</p>{foot}</section>
+
+<section id="x-zh-4-guardrails" class="card x"><div class=k>为什么敢放手</div><h2>五道<em>护栏</em></h2>{rails(G_ZH)}{foot}</section>
 '''
 css = '''
 :root{--bg:#12110f;--surface:#1f1d1a;--border:#34302b;--text:#f2efe9;--muted:#b3ada3;--accent:#f0955f;--term:#0d0c0b;
