@@ -442,7 +442,8 @@ function namedAgents(list: AgentRow[]): AgentRow[] {
 }
 
 function upsertAgent(list: AgentRow[], row: AgentRow): AgentRow[] {
-  const rest = list.filter(a => a.id !== row.id)
+  // Blank rows an older version stored go on the next write, so they never take a place of the MAX_AGENTS.
+  const rest = namedAgents(list).filter(a => a.id !== row.id)
   return [...rest, row].slice(-MAX_AGENTS)
 }
 
@@ -1008,7 +1009,7 @@ export const register: Register = (on, options) => {
     await update($, agents, list => {
       const row = list.find(a => a.id === e.agent_id)
       // A stop with no start seen and no type names nothing: no row rather than a blank one.
-      if (!row && !e.agent_type) return list
+      if (!row && !e.agent_type?.trim()) return list
       const summary = (e.last_assistant_message ?? '').split('\n').find(l => l.trim())?.slice(0, 120) ?? ''
       return upsertAgent(
         list,

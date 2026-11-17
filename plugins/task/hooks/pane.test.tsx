@@ -711,3 +711,39 @@ test('a subagent stop with no start seen and no type adds no blank row', async (
   const report = (await $.command.run({ ...RUN, args: 'report' }))?.text ?? ''
   expect(report.split('\n').filter(l => /^ {2}[●○] /.test(l)).length).toBe(2)
 })
+
+test('blank subagent rows an older version stored are not drawn, and go on the next write', async ($, on) => {
+  on('session.cwd', () => ({ value: '/proj' }))
+  on('clock.now', () => ({ value: new Date(2026, 10, 15, 12, 0, 0).getTime() }))
+  on('fs.exists', (_$, e) => ({ value: e.path in FILES }))
+  on('fs.list', () => ({ value: [] }))
+  on('fs.read', (_$, e) => (FILES[e.path] === undefined ? { deny: 'ENOENT' } : { value: FILES[e.path]! }))
+  on('ui.open', () => ({ value: { isPlaced: true as const } }))
+  on('ui.status', () => ({ value: undefined }))
+  on('process.run', () => ({ deny: 'not macOS' }))
+  on('env.get', (_$, e) => ({ value: e.name === 'LANG' ? 'zh_CN.UTF-8' : undefined }))
+  on('agent.list', () => ({ value: [] }))
+  on('classic.SubagentStop', () => ({}))
+  const t = new Date(2026, 10, 15, 12, 0, 0).getTime()
+  const blank = (id: string) => ({ id, label: '', type: '', task: null, status: 'done' as const, startedAt: t, endedAt: t, summary: '' })
+  const named = { ...blank('a1'), label: 'Review T-012 wrap fix', type: 'code-reviewer' }
+  // The store as an older version left it: blank rows beside a real one.
+  let stored: unknown = [blank('x1'), named, blank('x2'), blank('x3')]
+  let version = 1
+  on('state.get', { plugin: 'task', key: 'agents' }, () => ({ value: { value: stored as never, version } }))
+  on('state.set', { plugin: 'task', key: 'agents' }, (_$, e) => {
+    stored = e.value
+    version += 1
+    return { value: { isSet: true, version } }
+  })
+  await $.command.run(RUN)
+  const ui = await $.ui.mount({ plugin: 'task', surface: 'terminal', component: 'Pane', requestId: 'task-dash', props: PANE_PROPS })
+  expect(await ui.find({ key: 'agent:a1' })).toBeDefined()
+  for (const id of ['x1', 'x2', 'x3']) expect(await ui.find({ key: `agent:${id}` })).toBeUndefined()
+  await ui.unmount()
+  const report = (await $.command.run({ ...RUN, args: 'report' }))?.text ?? ''
+  expect(report.split('\n').filter(l => /^ {2}[●○] /.test(l)).length).toBe(1)
+  // The next row written drops them from the store too.
+  await $.classic.SubagentStop({ agent_id: 'b1', agent_type: 'Explore' })
+  expect((stored as { id: string }[]).map(a => a.id)).toEqual(['a1', 'b1'])
+})
