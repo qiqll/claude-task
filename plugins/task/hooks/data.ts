@@ -65,8 +65,29 @@ export function normalizeStatus(raw: string): string {
   return text
 }
 
+/** What separates a note's clauses (`来源：…；验收：… · 自动交付：…`). */
+const NOTE_SEP = /\s*(?:[；;\n]| · )\s*/
+
+/** A note split into its clauses, blanks and `—` dropped. */
+export function noteClauses(note: string): string[] {
+  return note
+    .split(NOTE_SEP)
+    .map(c => c.trim())
+    .filter(c => c && c !== '—')
+}
+
+/** The acceptance a clause states (`验收：…`), or '' when it states none. */
+export function clauseAcceptance(clause: string): string {
+  return /验收[：:]\s*(.+)/.exec(clause)?.[1]?.trim() ?? ''
+}
+
+/** The task's acceptance: the first clause of its note that states one. */
 function acceptanceOf(note: string): string {
-  return /验收[：:]\s*([^；;\n]+)/.exec(note)?.[1]?.trim() ?? ''
+  for (const c of noteClauses(note)) {
+    const a = clauseAcceptance(c)
+    if (a) return a
+  }
+  return ''
 }
 
 function derivedFromOf(note: string): string {

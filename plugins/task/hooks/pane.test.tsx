@@ -508,3 +508,65 @@ test('a note of several clauses lists them one to a line, and an empty note says
   expect((await ui.find({ key: 'field:T-110:note' }))?.text).toContain('无备注')
   await ui.unmount()
 })
+
+test('a second 验收 in the note stays in the note, and labels keep one column across cards', async ($, on) => {
+  const backlog = BACKLOG.replace(
+    '| T-111 | 想法 | 其他 | 待开始 | — | — |',
+    '| T-111 | 想法 | 其他 | 待开始 | — | 验收：pytest x · 自动交付（2026-11-17）：commits abc；验收：31 项全绿 |',
+  )
+  expect(backlog).not.toBe(BACKLOG)
+  const files: Record<string, string> = { ...FILES, '/proj/.claude/backlog.md': backlog }
+  on('session.cwd', () => ({ value: '/proj' }))
+  on('clock.now', () => ({ value: new Date(2026, 10, 15, 12, 0, 0).getTime() }))
+  on('fs.exists', (_$, e) => ({ value: e.path in files }))
+  on('fs.list', () => ({ value: [] }))
+  on('fs.read', (_$, e) => (files[e.path] === undefined ? { deny: 'ENOENT' } : { value: files[e.path]! }))
+  on('ui.open', () => ({ value: { isPlaced: true as const } }))
+  on('ui.status', () => ({ value: undefined }))
+  on('process.run', () => ({ deny: 'not macOS' }))
+  on('env.get', (_$, e) => ({ value: e.name === 'LANG' ? 'zh_CN.UTF-8' : undefined }))
+  on('agent.list', () => ({ value: [] }))
+  await $.command.run(RUN)
+  const labelWidths = async (ui: Awaited<ReturnType<typeof $.ui.mount>>, id: string) => {
+    const field = await ui.find({ key: `field:${id}:module` })
+    const label = (await ui.findAll({ type: 'Box' })).find(b => b.props.flexShrink === 0 && typeof b.props.width === 'number' && field?.text.startsWith(String(b.text)) && /^(模块|Module)$/.test(String(b.text)))
+    return label?.props.width
+  }
+  const ui = await $.ui.mount({ plugin: 'task', surface: 'terminal', component: 'Pane', requestId: 'task-dash', props: { ...PANE_PROPS, bodyColumns: 46 } })
+  await ui.press({ key: 'filter:all' })
+  await ui.press({ key: 'task:T-111' })
+  expect((await ui.find({ key: 'field:T-111:acceptance' }))?.text).toContain('pytest x')
+  expect((await ui.find({ key: 'field:T-111:acceptance' }))?.text).not.toContain('自动交付')
+  const note = (await ui.find({ key: 'field:T-111:note' }))?.text ?? ''
+  // The delivery's own 验收 is what the requester checks: it is not dropped with the first one.
+  expect(note).toContain('验收：31 项全绿')
+  expect(note).toContain('自动交付（2026-11-17）：commits abc')
+  expect(note).not.toContain('pytest x')
+  const plain = await labelWidths(ui, 'T-111')
+  expect(plain).toBeGreaterThan(0)
+  // A card with 衍生自 and one without start their values at the same column.
+  await ui.press({ key: 'task:T-107' })
+  expect(await labelWidths(ui, 'T-107')).toBe(plain)
+  await ui.unmount()
+})
+
+test('English labels on an open row read as nouns', { options: { language: 'en' } }, async ($, on) => {
+  on('session.cwd', () => ({ value: '/proj' }))
+  on('clock.now', () => ({ value: new Date(2026, 10, 15, 12, 0, 0).getTime() }))
+  on('fs.exists', (_$, e) => ({ value: e.path in FILES }))
+  on('fs.list', () => ({ value: [] }))
+  on('fs.read', (_$, e) => (FILES[e.path] === undefined ? { deny: 'ENOENT' } : { value: FILES[e.path]! }))
+  on('ui.open', () => ({ value: { isPlaced: true as const } }))
+  on('ui.status', () => ({ value: undefined }))
+  on('process.run', () => ({ deny: 'not macOS' }))
+  on('env.get', () => ({ value: undefined }))
+  on('agent.list', () => ({ value: [] }))
+  await $.command.run(RUN)
+  const ui = await $.ui.mount({ plugin: 'task', surface: 'terminal', component: 'Pane', requestId: 'task-dash', props: { ...PANE_PROPS, bodyColumns: 46 } })
+  await ui.press({ key: 'task:T-107' })
+  expect((await ui.find({ key: 'field:T-107:module' }))?.text).toContain('Module')
+  expect((await ui.find({ key: 'field:T-107:derivedFrom' }))?.text).toContain('Derived from')
+  expect((await ui.find({ key: 'field:T-107:acceptance' }))?.text).toContain('Acceptance')
+  expect((await ui.find({ key: 'field:T-107:note' }))?.text).toContain('Notes')
+  await ui.unmount()
+})

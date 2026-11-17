@@ -140,7 +140,7 @@ const en: Strings = {
   noTitle: '(title not found in backlog)',
   halt: n => `Breakpoint: ${n}`,
   deps: d => `depends on ${d}`,
-  fields: { module: 'Module', deps: 'Depends', derivedFrom: 'From', acceptance: 'Accept', note: 'Notes' },
+  fields: { module: 'Module', deps: 'Depends', derivedFrom: 'Derived from', acceptance: 'Acceptance', note: 'Notes' },
   noNote: 'No notes',
   agentRunning: 'running',
   agentDone: 'finished',

@@ -2,7 +2,7 @@ import { atom, read, update } from 'claude-code'
 import type { EngineInterface, PluginOptions, Register } from 'claude-code'
 
 import type { AgentRow, PoolFiles, Snapshot, Task } from '../types'
-import { buildSnapshot, duration, percent, taskIdIn, transitions } from './data'
+import { buildSnapshot, clauseAcceptance, duration, noteClauses, percent, taskIdIn, transitions } from './data'
 import { firstAppleLanguage, pickLang, STRINGS, statusLabel } from './i18n'
 import type { Lang, Strings } from './i18n'
 
@@ -549,12 +549,14 @@ const DETAIL_CHROME = DETAIL_INDENT + 4
 /** Below this many cells beside the label column, a field puts its label above its value instead. */
 const MIN_VALUE_CELLS = 12
 
-/** A note's clauses (`来源：…；验收：…`), one per line; the acceptance clause is dropped as it has its own field. */
-function noteClauses(note: string): string[] {
-  return note
-    .split(/\s*(?:[；;]| · )\s*/)
-    .map(c => c.trim())
-    .filter(c => c && c !== '—' && !/^验收[：:]/.test(c))
+/**
+ * The note's clauses, one per line, less the clause the acceptance field already
+ * shows. Only that one is dropped: a later 验收 (a delivery's own) stays in the note.
+ */
+function noteLines(task: Task): string[] {
+  const clauses = noteClauses(task.note)
+  const shown = clauses.findIndex(c => /^验收[：:]/.test(c) && clauseAcceptance(c) === task.acceptance)
+  return shown < 0 ? clauses : clauses.filter((_, i) => i !== shown)
 }
 
 /**
@@ -588,6 +590,7 @@ function Field({ els, fieldKey, label, labelCells, stacked, lines, dim }: { els:
     </Box>
   )
   return (
+    // Keyed again here: the component's own key is React's list key and never reaches the host tree.
     <Box key={fieldKey} flexDirection={stacked ? 'column' : 'row'}>
       <Box flexShrink={0} width={stacked ? undefined : labelCells}>
         <Text dimColor>{label}</Text>
@@ -607,9 +610,10 @@ function TaskDetail({ els, task, isCurrent, cols }: { els: Els; task: Task; isCu
   if (task.deps && task.deps !== '—') fields.push({ name: 'deps', label: F.deps, lines: [task.deps] })
   if (task.derivedFrom) fields.push({ name: 'derivedFrom', label: F.derivedFrom, lines: [task.derivedFrom] })
   if (task.acceptance) fields.push({ name: 'acceptance', label: F.acceptance, lines: [task.acceptance] })
-  const clauses = noteClauses(task.note)
-  fields.push({ name: 'note', label: F.note, lines: clauses.length ? clauses : [L.noNote], dim: true })
-  const labelCells = Math.max(...fields.map(f => cellWidth(f.label))) + 2
+  const notes = noteLines(task)
+  fields.push({ name: 'note', label: F.note, lines: notes.length ? notes : [L.noNote], dim: true })
+  // Sized for every label, not just this card's, so values start at one column in every open row.
+  const labelCells = Math.max(...Object.values(F).map(cellWidth)) + 2
   const stacked = cols - DETAIL_CHROME - labelCells < MIN_VALUE_CELLS
   return (
     <Box key={`detail:${task.id}`} paddingLeft={DETAIL_INDENT}>

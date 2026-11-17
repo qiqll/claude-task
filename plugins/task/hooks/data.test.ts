@@ -9,6 +9,7 @@ import {
   parseProgress,
   parseRunLog,
   parseSession,
+  noteClauses,
   normalizeStatus,
   splitRow,
   transitions,
@@ -34,6 +35,13 @@ describe('parsing', () => {
     expect(b.tasks[2]).toMatchObject({ priority: 'P2', derivedFrom: 'T-104', deps: 'T-071', acceptance: '用例不依赖当天' })
     expect(b.decisions).toEqual([{ task: 'T-105', question: '超限怎么处理？', options: 'A. 扩列（推荐）；B. 拒绝', since: '2026-11-03' }])
     expect(b.humanBlocks).toEqual([{ id: 'H-022', desc: '生产库核对三列', blocks: 'T-096', status: '待处理' }])
+  })
+
+  test('a note splits into clauses on ；, ; and · , and its first 验收 clause is the acceptance', () => {
+    expect(noteClauses('来源：需求方；验收：pytest x · 自动交付：commits abc; 假设：— ；—')).toEqual(['来源：需求方', '验收：pytest x', '自动交付：commits abc', '假设：—'])
+    expect(noteClauses('—')).toEqual([])
+    const md = '## P1 — 重要\n\n| ID | 任务 | 模块 | 状态 | 依赖 | 备注 |\n|--|--|--|--|--|--|\n| T-1 | a | m | 待验证 | — | 验收：pytest x · 自动交付：commits abc；验收：31 项全绿 |\n'
+    expect(parseBacklog(md).tasks[0]?.acceptance).toBe('pytest x')
   })
 
   test('status suffixes normalize to the base status', () => {
