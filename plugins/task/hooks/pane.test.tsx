@@ -208,24 +208,24 @@ test('direct subagents show while no loop runs, and a missed stop does not stick
     return { value: undefined }
   })
   await $.command.run(RUN)
-  expect(statuses.at(-1)).not.toContain('子 agent')
+  expect(statuses.at(-1)).not.toContain('子代理')
   await $.classic.SubagentStart({ agent_id: 'a1', agent_type: 'code-reviewer' })
-  expect(statuses.at(-1)).toContain('子 agent 1 个运行中')
+  expect(statuses.at(-1)).toContain('子代理 1 个运行中')
   const ui = await $.ui.mount({ plugin: 'task', surface: 'terminal', component: 'Pane', requestId: 'task-dash', props: PANE_PROPS })
-  expect(await ui.find({ type: 'Text', text: /子 agent 1 个运行中/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /子代理 1 个运行中/ })).toBeDefined()
   await ui.unmount()
-  expect((await $.command.run({ ...RUN, args: 'report' }))?.text).toContain('子 agent 1 个运行中')
+  expect((await $.command.run({ ...RUN, args: 'report' }))?.text).toContain('子代理 1 个运行中')
   // A teammate waiting for a message is not work under way.
   agentStatus = 'idle'
   await $.command.run({ ...RUN, args: 'report' })
-  expect(statuses.at(-1)).not.toContain('子 agent')
+  expect(statuses.at(-1)).not.toContain('子代理')
   agentStatus = 'running'
   await $.command.run({ ...RUN, args: 'report' })
-  expect(statuses.at(-1)).toContain('子 agent 1 个运行中')
+  expect(statuses.at(-1)).toContain('子代理 1 个运行中')
   // The engine says it is over though no SubagentStop arrived: the next read settles it.
   agentStatus = 'completed'
   await $.command.run({ ...RUN, args: 'report' })
-  expect(statuses.at(-1)).not.toContain('子 agent')
+  expect(statuses.at(-1)).not.toContain('子代理')
 })
 
 test('a subagent dropped from the engine list without a stop is settled, even when the pool read fails', async ($, on) => {
@@ -249,11 +249,11 @@ test('a subagent dropped from the engine list without a stop is settled, even wh
   await $.command.run(RUN)
   await $.classic.SubagentStart({ agent_id: 'a1', agent_type: 'Explore' })
   // No pool here: the status line still says work is under way.
-  expect(statuses.at(-1)).toContain('子 agent 1 个运行中')
+  expect(statuses.at(-1)).toContain('子代理 1 个运行中')
   // Gone from the list, but too young to be judged missing.
   listed = false
   await $.command.run({ ...RUN, args: 'report' })
-  expect(statuses.at(-1)).toContain('子 agent 1 个运行中')
+  expect(statuses.at(-1)).toContain('子代理 1 个运行中')
   t += 10_000
   await $.command.run({ ...RUN, args: 'report' })
   expect(statuses.at(-1)).toBeUndefined()
