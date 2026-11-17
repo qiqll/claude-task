@@ -74,7 +74,7 @@ argument-hint: "[max=N 最多任务数，默认 10] [hours=N 最长时长，默�
    开工时的脏文件（不许碰、不许 add）：<dirty 原文，无则写「无」>
    <若是打回 / 失败重试：上次原因与需求方意见原文；若有 halted 断点：断点说明>
    ```
-   写 current（`phase=running`），给需求方一句话：「T-0NN 已派给后台 worker，你可以随时说话」。**然后结束本回合**，等完成通知。
+   写 current（`phase=running`）；`run.log` 追加 `<时间> | T-0NN | DISPATCH | nonce=<nonce>`（面板据此算中位周期，时间格式同其他行 `YYYY-MM-DD HH:MM:SS`）。给需求方一句话：「T-0NN 已派给后台 worker，你可以随时说话」。**然后结束本回合**，等完成通知。
 
 ## C. 验收（worker 完成通知 / 心跳发现报告）
 

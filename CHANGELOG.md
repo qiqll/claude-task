@@ -7,6 +7,8 @@ All notable changes to the `task` plugin. Versions follow [semver](https://semve
 - Docs: English README (default) with Chinese version in `README.zh-CN.md`; new "Why", guardrails, quick start and "Update" sections.
 - Docs: landing page at https://qiqll.github.io/claude-task/ and promo copy in `docs/promo/`.
 - Marketplace: clearer English/Chinese descriptions, keywords and homepage.
+- Fix: `/task:loop` now logs a `DISPATCH` event when it sends a worker, so the pane's median cycle time is computed (it always showed `—` before).
+- Docs: quick start includes moving off `main` and committing the task pool before `/task:loop`; `/task:next` documented as needing git.
 - Repo: issue templates and a CI check that the plugin version is bumped when plugin files change.
 
 ## 0.3.0 — 2026-11-16

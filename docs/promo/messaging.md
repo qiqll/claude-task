@@ -30,7 +30,7 @@
 
 ### 4. 进度一目了然 / Everything visible at a glance
 - 中：右侧面板 + 输入框下方状态行实时显示：正在做什么、做完了什么、还剩什么、等你决定什么；任务进入待验证 / 待决策 / 阻塞时弹提醒。完成率、一次通过率、中位周期一并给出。
-- EN: A side pane and a status line show what's running, what's done, what's left and what's waiting on you; toasts fire when a task needs verification or a decision. Completion rate, first-pass rate and median cycle time included.
+- EN: A side pane and a status line show what's running, what's done, what's left and what's waiting on you; toasts fire when a task needs verification or a decision, or gets blocked. Completion rate, first-pass rate and median cycle time included.
 
 ### 护城河：敢放手的护栏 / Guardrails that let you walk away
 - 中：

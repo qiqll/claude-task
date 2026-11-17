@@ -48,13 +48,25 @@ In a Claude Code terminal session, type:
 
 Answer `y` to `Add marketplace?`, pick an install scope (user is recommended), then **start a new session**.
 
-### Get started in three steps
+If your Claude Code version doesn't accept that form, use the two-step equivalent:
+
+```text
+/plugin marketplace add qiqll/claude-task
+/plugin install task@claude-task
+```
+
+### Get started
+
+In a new session, inside a git repo:
 
 ```text
 /task:init                          # create the task pool in your project root
 /task:add add CSV export to orders  # plain language; several requests at once is fine
-/task:loop                          # start the loop (needs a git repo, not on main)
+! git switch -c tasks && git add .claude .gitignore && git commit -m "chore: task pool"
+/task:loop                          # start the loop
 ```
+
+The third line moves you off `main` and commits the task pool: the loop never runs on `main`/`master` and won't start while the backlog files have uncommitted changes (it never commits your drafts for you). The `!` prefix runs it as a shell command inside Claude Code; running it in your own terminal works too.
 
 ### Update
 
@@ -64,7 +76,7 @@ Third-party marketplaces don't auto-update by default. To get a new version:
 /plugin marketplace update claude-task
 ```
 
-Then update the task plugin from the `/plugin` menu and start a new session. You can also turn on auto-update for `claude-task` under `/plugin` → Marketplaces. **Don't upgrade while a loop is running** (see below).
+Then update the task plugin from the `/plugin` menu (or run `claude plugin update task@claude-task` in a shell) and start a new session. You can also turn on auto-update for `claude-task` under `/plugin` → Marketplaces. **Don't upgrade while a loop is running** (see below).
 
 ## Commands
 
@@ -80,7 +92,7 @@ Then update the task plugin from the `/plugin` menu and start a new session. You
 
 States: `To do → In progress → To verify → Done`, with side states `Blocked` / `Decision` / `Rejected`. A task's finished state is "to verify"; it's archived only after you confirm.
 
-`/task:loop` needs a git repo (it records the starting SHA and accepts by commit). `/task:add`, `/task:next` and `/task:status` don't. Don't upgrade the plugin while a loop is running: skill paths include the version number, so an upgrade makes the running loop lose its scripts.
+`/task:loop` needs a git repo (it records the starting SHA and accepts by commit). `/task:next` commits too, so it also needs one; only `/task:add` and `/task:status` work without git. Don't upgrade the plugin while a loop is running: skill paths include the version number, so an upgrade makes the running loop lose its scripts.
 
 ### qtask (optional)
 

@@ -50,7 +50,7 @@ gh auth login
 /plugin install task --marketplace qiqll/claude-task
 ```
 
-新开会话，确认 `/task:init` 可用、`/plugin` 里显示版本 0.3.1。
+新开会话，确认 `/task:init` 可用、`/plugin` 里显示版本 0.3.1。再用 README 里的两步写法（`/plugin marketplace add` + `/plugin install task@claude-task`）装一次，确认备用方案也能用。
 
 ## 6. 发布渠道
 
@@ -65,6 +65,6 @@ gh auth login
 
 ## 7. 之后每次发版
 
-1. 改 `plugins/task/.claude-plugin/plugin.json` 和 `.claude-plugin/marketplace.json` 里的 `version`，并在 `CHANGELOG.md` 加一节（CI 会检查前者和 CHANGELOG）。
+1. 改 `plugins/task/.claude-plugin/plugin.json` 里的 `version`（唯一的版本号来源），并在 `CHANGELOG.md` 加一节；CI 会检查这两处。
 2. 推送并打 tag、创建 GitHub Release。
 3. 提醒老用户：`/plugin marketplace update claude-task`。

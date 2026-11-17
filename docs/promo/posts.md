@@ -35,7 +35,7 @@
 ```
 /plugin install task --marketplace qiqll/claude-task
 ```
-然后新开会话，`/task:init` → `/task:add …` → `/task:loop`。
+然后新开会话，`/task:init` → `/task:add …` → 切到新分支并提交任务池 → `/task:loop`（完整步骤见主页）。
 
 主页：https://qiqll.github.io/claude-task/
 GitHub：https://github.com/qiqll/claude-task（MIT，欢迎提 issue）

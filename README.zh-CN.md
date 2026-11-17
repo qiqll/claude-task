@@ -48,13 +48,25 @@
 
 提示 `Add marketplace?` 时按 `y`，选择安装范围（推荐 user），然后**新开一个会话**生效。
 
-### 三步上手
+如果你的 Claude Code 版本不接受这种写法，用等价的两步：
+
+```text
+/plugin marketplace add qiqll/claude-task
+/plugin install task@claude-task
+```
+
+### 上手
+
+新开会话，在 git 仓库里：
 
 ```text
 /task:init                         # 在项目根建任务池
 /task:add 给订单列表加 CSV 导出      # 口语录入，可以一次说好几条
-/task:loop                         # 开始自动循环（需 git 仓库、非 main 分支）
+! git switch -c tasks && git add .claude .gitignore && git commit -m "chore: task pool"
+/task:loop                         # 开始自动循环
 ```
+
+第三行的作用是离开 `main` 并提交任务池：循环不在 `main`/`master` 上运行，backlog 文件有未提交改动时也不会启动（它从不替你提交草稿）。`!` 前缀表示在 Claude Code 里直接执行 shell 命令，在你自己的终端里执行也一样。
 
 ### 更新
 
@@ -64,7 +76,7 @@
 /plugin marketplace update claude-task
 ```
 
-然后在 `/plugin` 菜单里更新 task 插件，并新开会话。也可以在 `/plugin` → Marketplaces 里给 `claude-task` 打开自动更新。**自动循环运行期间不要升级**（原因见下文）。
+然后在 `/plugin` 菜单里更新 task 插件（或在 shell 里执行 `claude plugin update task@claude-task`），并新开会话。也可以在 `/plugin` → Marketplaces 里给 `claude-task` 打开自动更新。**自动循环运行期间不要升级**（原因见下文）。
 
 ## 命令
 
@@ -80,7 +92,7 @@
 
 状态机：`待开始 → 进行中 → 待验证 → 已完成`，旁路 `阻塞` / `待决策` / `打回`。任务完成态是「待验证」，需求方确认后才归档。
 
-`/task:loop` 需要 git 仓库（记开工 SHA、按提交验收）；`/task:add` `/task:next` `/task:status` 不需要。自动循环运行期间不要升级本插件（技能路径带版本号，升级会让运行中的循环找不到脚本）。
+`/task:loop` 需要 git 仓库（记开工 SHA、按提交验收）；`/task:next` 也会提交，同样需要；只有 `/task:add` `/task:status` 不需要 git。自动循环运行期间不要升级本插件（技能路径带版本号，升级会让运行中的循环找不到脚本）。
 
 ### qtask（可选）
 

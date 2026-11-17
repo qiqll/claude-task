@@ -347,7 +347,7 @@ footer nav { display: flex; flex-wrap: wrap; gap: 8px 20px; }
       <article class="card">
         <span class="n">04</span>
         <h3><span data-lang="en">Everything visible at a glance</span><span data-lang="zh">进度一目了然</span></h3>
-        <p><span data-lang="en">A side pane and a status line show what's running, what's done, what's left and what's waiting on you; toasts fire when a task needs verification or a decision. Completion rate, first-pass rate and median cycle time included.</span><span data-lang="zh">右侧面板 + 输入框下方状态行实时显示：正在做什么、做完了什么、还剩什么、等你决定什么；任务进入待验证 / 待决策 / 阻塞时弹提醒。完成率、一次通过率、中位周期一并给出。</span></p>
+        <p><span data-lang="en">A side pane and a status line show what's running, what's done, what's left and what's waiting on you; toasts fire when a task needs verification or a decision, or gets blocked. Completion rate, first-pass rate and median cycle time included.</span><span data-lang="zh">右侧面板 + 输入框下方状态行实时显示：正在做什么、做完了什么、还剩什么、等你决定什么；任务进入待验证 / 待决策 / 阻塞时弹提醒。完成率、一次通过率、中位周期一并给出。</span></p>
       </article>
     </div>
   </div>
@@ -399,7 +399,7 @@ footer nav { display: flex; flex-wrap: wrap; gap: 8px 20px; }
 <section id="start">
   <div class="wrap">
     <span class="eyebrow"><span data-lang="en">Quick start</span><span data-lang="zh">快速开始</span></span>
-    <h2><span data-lang="en">Three steps to your first loop</span><span data-lang="zh">三步跑起第一个循环</span></h2>
+    <h2><span data-lang="en">Four steps to your first loop</span><span data-lang="zh">四步跑起第一个循环</span></h2>
     <p class="lede"><span data-lang="en">Run these inside a Claude Code session.</span><span data-lang="zh">以下命令在 Claude Code 会话里执行。</span></p>
     <ol class="steps">
       <li><span class="num" aria-hidden="true">1</span><div>
@@ -410,6 +410,9 @@ footer nav { display: flex; flex-wrap: wrap; gap: 8px 20px; }
         <pre><code>/task:init
 /task:add add CSV export to the reports page</code></pre></div></li>
       <li><span class="num" aria-hidden="true">3</span><div>
+        <p><strong><span data-lang="en">Move off main and commit the task pool (the loop won't run on main or with uncommitted backlog files)</span><span data-lang="zh">离开 main 并提交任务池（循环不在 main 上运行，backlog 有未提交改动也不会启动）</span></strong></p>
+        <pre><code>! git switch -c tasks &amp;&amp; git add .claude .gitignore &amp;&amp; git commit -m &quot;chore: task pool&quot;</code></pre></div></li>
+      <li><span class="num" aria-hidden="true">4</span><div>
         <p><strong><span data-lang="en">Start the loop and go do something else</span><span data-lang="zh">启动循环，去忙别的</span></strong></p>
         <pre><code>/task:loop</code></pre></div></li>
     </ol>
