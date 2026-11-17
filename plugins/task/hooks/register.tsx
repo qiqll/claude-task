@@ -543,17 +543,96 @@ const tagCells = (label: string) => cellWidth(label) + 3
 /** Columns left to a task title once the row's fixed parts are drawn, below which a long status drops its suffix. */
 const MIN_TITLE_CELLS = 8
 
+/** The card's indent under the row, its border and its horizontal padding, in cells. */
+const DETAIL_INDENT = 2
+const DETAIL_CHROME = DETAIL_INDENT + 4
+/** Below this many cells beside the label column, a field puts its label above its value instead. */
+const MIN_VALUE_CELLS = 12
+
+/** A note's clauses (`来源：…；验收：…`), one per line; the acceptance clause is dropped as it has its own field. */
+function noteClauses(note: string): string[] {
+  return note
+    .split(/\s*(?:[；;]| · )\s*/)
+    .map(c => c.trim())
+    .filter(c => c && c !== '—' && !/^验收[：:]/.test(c))
+}
+
+/**
+ * One labelled field of an expanded row. Labels sit in a column of one width,
+ * so every value starts at the same cell and wraps under itself, not under the label.
+ */
+function Field({ els, fieldKey, label, labelCells, stacked, lines, dim }: { els: Els; fieldKey: string; label: string; labelCells: number; stacked: boolean; lines: string[]; dim?: boolean }) {
+  const { Box, Text } = els
+  const values = (
+    <Box flexDirection="column" flexGrow={1} flexShrink={1} minWidth={0} paddingLeft={stacked ? 2 : 0}>
+      {lines.map((line, i) =>
+        lines.length > 1 ? (
+          <Box key={`${fieldKey}:${i}`}>
+            <Box flexShrink={0}>
+              <Text dimColor>· </Text>
+            </Box>
+            <Box flexGrow={1} flexShrink={1} minWidth={0}>
+              <Text wrap="wrap" dimColor={dim}>
+                {line}
+              </Text>
+            </Box>
+          </Box>
+        ) : (
+          <Box key={`${fieldKey}:${i}`}>
+            <Text wrap="wrap" dimColor={dim}>
+              {line}
+            </Text>
+          </Box>
+        ),
+      )}
+    </Box>
+  )
+  return (
+    <Box key={fieldKey} flexDirection={stacked ? 'column' : 'row'}>
+      <Box flexShrink={0} width={stacked ? undefined : labelCells}>
+        <Text dimColor>{label}</Text>
+      </Box>
+      {values}
+    </Box>
+  )
+}
+
+/** An open task row: the whole title, then module / deps / origin / acceptance / notes as aligned fields, in a card like the current task's. */
+function TaskDetail({ els, task, isCurrent, cols }: { els: Els; task: Task; isCurrent: boolean; cols: number }) {
+  const { Box, Text } = els
+  const F = L.fields
+  const fields: { name: string; label: string; lines: string[]; dim?: boolean }[] = [
+    { name: 'module', label: F.module, lines: [task.module || '—'] },
+  ]
+  if (task.deps && task.deps !== '—') fields.push({ name: 'deps', label: F.deps, lines: [task.deps] })
+  if (task.derivedFrom) fields.push({ name: 'derivedFrom', label: F.derivedFrom, lines: [task.derivedFrom] })
+  if (task.acceptance) fields.push({ name: 'acceptance', label: F.acceptance, lines: [task.acceptance] })
+  const clauses = noteClauses(task.note)
+  fields.push({ name: 'note', label: F.note, lines: clauses.length ? clauses : [L.noNote], dim: true })
+  const labelCells = Math.max(...fields.map(f => cellWidth(f.label))) + 2
+  const stacked = cols - DETAIL_CHROME - labelCells < MIN_VALUE_CELLS
+  return (
+    <Box key={`detail:${task.id}`} paddingLeft={DETAIL_INDENT}>
+      <Box flexDirection="column" flexGrow={1} minWidth={0} borderStyle="round" borderColor={isCurrent ? 'claude' : 'subtle'} paddingX={1}>
+        <Box key={`detail-title:${task.id}`}>
+          <Text bold wrap="wrap">
+            {task.title}
+          </Text>
+        </Box>
+        {fields.map(f => (
+          <Field key={`field:${task.id}:${f.name}`} els={els} fieldKey={`field:${task.id}:${f.name}`} label={f.label} labelCells={labelCells} stacked={stacked} lines={f.lines} dim={f.dim} />
+        ))}
+      </Box>
+    </Box>
+  )
+}
+
 function taskRow($: EngineInterface, els: Els, task: Task, isOpen: boolean, isCurrent: boolean, cols: number) {
   const { Box, Text, Button } = els
   const leadCells = cellWidth(`${task.priority || '—'} ▸ ${task.id} `)
   // A suffixed status (待验证✗验证失败) keeps only its name where the whole would leave the title no room.
   const full = statusLabel(L, task.status, task.statusLabel)
   const label = leadCells + tagCells(full) + MIN_TITLE_CELLS > cols ? statusLabel(L, task.status, '') : full
-  const meta = [
-    task.module || '—',
-    task.deps && task.deps !== '—' ? L.deps(task.deps) : null,
-    task.derivedFrom ? L.derivedFrom(task.derivedFrom) : null,
-  ].filter(Boolean)
   return (
     <Box key={`row:${task.id}`} flexDirection="column">
       <Box>
@@ -574,17 +653,7 @@ function taskRow($: EngineInterface, els: Els, task: Task, isOpen: boolean, isCu
         </Box>
         <StatusTag els={els} tagKey={`tag:${task.id}`} status={task.status} label={label} width={Math.max(0, Math.min(tagCells(label), cols - leadCells))} />
       </Box>
-      {isOpen ? (
-        <Box flexDirection="column" paddingLeft={4} marginBottom={1}>
-          <Text dimColor wrap="wrap">
-            {meta.join(' · ')}
-          </Text>
-          {task.acceptance ? <Text wrap="wrap">{L.acceptance(task.acceptance)}</Text> : null}
-          <Text dimColor wrap="wrap">
-            {task.note || L.noNote}
-          </Text>
-        </Box>
-      ) : null}
+      {isOpen ? <TaskDetail els={els} task={task} isCurrent={isCurrent} cols={cols} /> : null}
     </Box>
   )
 }

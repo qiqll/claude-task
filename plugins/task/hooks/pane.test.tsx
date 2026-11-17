@@ -62,7 +62,9 @@ test('pane draws the pool and filters on every surface', async ($, on) => {
     await ui.press({ key: 'filter:active' })
     // Expanding a row shows its acceptance criteria.
     await ui.press({ key: 'task:T-071' })
-    expect(await ui.find({ type: 'Text', text: /验收：pytest/ })).toBeDefined()
+    const acceptance = await ui.find({ key: 'field:T-071:acceptance' })
+    expect(acceptance?.text).toContain('验收')
+    expect(acceptance?.text).toContain('pytest tests/test_pool.py')
     await ui.press({ key: 'task:T-071' })
     await ui.unmount()
   }
@@ -416,4 +418,93 @@ test('a suffixed status keeps its suffix where it fits and drops it on a narrow 
     expect(tag?.text.includes('验证失败')).toBe(suffixed)
     await ui.unmount()
   }
+})
+
+test('an open row is a card of aligned fields: whole title, module/deps/origin, acceptance, then the note clause by clause', async ($, on) => {
+  const long = '日期炸弹改相对时间并且把所有依赖当天日期的用例都改成相对时间，避免跨天失败'
+  const backlog = BACKLOG.replace('| T-107 | 日期炸弹改相对时间 |', `| T-107 | ${long} |`)
+  expect(backlog).not.toBe(BACKLOG)
+  const files: Record<string, string> = { ...FILES, '/proj/.claude/backlog.md': backlog }
+  on('session.cwd', () => ({ value: '/proj' }))
+  on('clock.now', () => ({ value: new Date(2026, 10, 15, 12, 0, 0).getTime() }))
+  on('fs.exists', (_$, e) => ({ value: e.path in files }))
+  on('fs.list', () => ({ value: [] }))
+  on('fs.read', (_$, e) => (files[e.path] === undefined ? { deny: 'ENOENT' } : { value: files[e.path]! }))
+  on('ui.open', () => ({ value: { isPlaced: true as const } }))
+  on('ui.status', () => ({ value: undefined }))
+  on('process.run', () => ({ deny: 'not macOS' }))
+  on('env.get', (_$, e) => ({ value: e.name === 'LANG' ? 'zh_CN.UTF-8' : undefined }))
+  on('agent.list', () => ({ value: [] }))
+  await $.command.run(RUN)
+  for (const [cols, stacked] of [[80, false], [46, false], [20, true]] as const) {
+    const ui = await $.ui.mount({ plugin: 'task', surface: 'terminal', component: 'Pane', requestId: 'task-dash', props: { ...PANE_PROPS, bodyColumns: cols } })
+    expect(await ui.find({ key: 'detail:T-107' })).toBeUndefined()
+    await ui.press({ key: 'task:T-107' })
+    // A card in the same rounded style as the current task's, subtle for a task not running now.
+    const card = await ui.find({ key: 'detail:T-107' })
+    expect(card).toBeDefined()
+    const boxes = await ui.findAll({ type: 'Box' })
+    expect(boxes.some(b => b.props.borderStyle === 'round' && b.props.borderColor === 'subtle' && b.props.paddingX === 1 && String(b.text).includes(long))).toBe(true)
+    // The whole title, wrapped rather than cut as on the row.
+    const title = await ui.find({ key: 'detail-title:T-107' })
+    expect(title?.text).toBe(long)
+    const titleText = await ui.findAll({ type: 'Text', text: long })
+    expect(titleText.some(t => t.props.wrap === 'wrap' && t.props.bold === true)).toBe(true)
+    // Fields in order, each label beside (or, too narrow, above) its value.
+    const names = ['module', 'deps', 'derivedFrom', 'acceptance', 'note']
+    const fields = await Promise.all(names.map(n => ui.find({ key: `field:T-107:${n}` })))
+    expect(fields.every(Boolean)).toBe(true)
+    expect(fields[0]?.text).toContain('模块')
+    expect(fields[0]?.text).toContain('测试')
+    expect(fields[1]?.text).toContain('T-071')
+    expect(fields[2]?.text).toContain('T-104')
+    expect(fields[3]?.text).toContain('用例不依赖当天')
+    for (const f of fields) expect(f?.props.flexDirection).toBe(stacked ? 'column' : 'row')
+    // The note's acceptance clause is not repeated; what is left is one clause a line.
+    expect(fields[4]?.text).toContain('来源：衍生自 T-104（第 1 层）')
+    expect(fields[4]?.text).not.toContain('验收')
+    await ui.press({ key: 'task:T-107' })
+    expect(await ui.find({ key: 'detail:T-107' })).toBeUndefined()
+    await ui.unmount()
+  }
+  // A labels column of one width: every value starts at the same cell, so wrapped lines line up.
+  const ui = await $.ui.mount({ plugin: 'task', surface: 'terminal', component: 'Pane', requestId: 'task-dash', props: { ...PANE_PROPS, bodyColumns: 46 } })
+  await ui.press({ key: 'task:T-071' })
+  const labels = (await ui.findAll({ type: 'Box' })).filter(b => b.props.flexShrink === 0 && typeof b.props.width === 'number' && /^(模块|验收|备注)$/.test(String(b.text)))
+  expect(labels.length).toBe(3)
+  expect(new Set(labels.map(b => b.props.width)).size).toBe(1)
+  // The running task's card takes the current task's accent; a note of several clauses is listed with bullets.
+  const boxes = await ui.findAll({ type: 'Box' })
+  expect(boxes.some(b => b.props.borderStyle === 'round' && b.props.borderColor === 'claude' && String(b.text).includes('来源：需求方'))).toBe(true)
+  await ui.unmount()
+})
+
+test('a note of several clauses lists them one to a line, and an empty note says so', async ($, on) => {
+  const backlog = BACKLOG.replace('| T-111 | 想法 | 其他 | 待开始 | — | — |', '| T-111 | 想法 | 其他 | 待开始 | — | 来源：需求方；断点：改到一半 · 自动交付：commits abc |')
+  expect(backlog).not.toBe(BACKLOG)
+  const files: Record<string, string> = { ...FILES, '/proj/.claude/backlog.md': backlog }
+  on('session.cwd', () => ({ value: '/proj' }))
+  on('clock.now', () => ({ value: new Date(2026, 10, 15, 12, 0, 0).getTime() }))
+  on('fs.exists', (_$, e) => ({ value: e.path in files }))
+  on('fs.list', () => ({ value: [] }))
+  on('fs.read', (_$, e) => (files[e.path] === undefined ? { deny: 'ENOENT' } : { value: files[e.path]! }))
+  on('ui.open', () => ({ value: { isPlaced: true as const } }))
+  on('ui.status', () => ({ value: undefined }))
+  on('process.run', () => ({ deny: 'not macOS' }))
+  on('env.get', (_$, e) => ({ value: e.name === 'LANG' ? 'zh_CN.UTF-8' : undefined }))
+  on('agent.list', () => ({ value: [] }))
+  await $.command.run(RUN)
+  const ui = await $.ui.mount({ plugin: 'task', surface: 'terminal', component: 'Pane', requestId: 'task-dash', props: { ...PANE_PROPS, bodyColumns: 46 } })
+  await ui.press({ key: 'filter:all' })
+  await ui.press({ key: 'task:T-111' })
+  for (const [i, clause] of ['来源：需求方', '断点：改到一半', '自动交付：commits abc'].entries()) {
+    const line = await ui.find({ key: `field:T-111:note:${i}` })
+    expect(line?.text).toContain('·')
+    expect(line?.text).toContain(clause)
+  }
+  // No deps, no origin, no acceptance: those fields are left out rather than drawn empty.
+  for (const n of ['deps', 'derivedFrom', 'acceptance']) expect(await ui.find({ key: `field:T-111:${n}` })).toBeUndefined()
+  await ui.press({ key: 'task:T-110' })
+  expect((await ui.find({ key: 'field:T-110:note' }))?.text).toContain('无备注')
+  await ui.unmount()
 })
