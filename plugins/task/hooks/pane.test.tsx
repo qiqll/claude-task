@@ -183,3 +183,38 @@ test('the report caps the task list and speaks the UI language', async ($, on) =
   expect(all?.text).toContain('T-219')
   expect(all?.text).not.toContain('more,')
 })
+
+test('direct subagents show while no loop runs, and a missed stop does not stick', async ($, on) => {
+  const statuses: (string | undefined)[] = []
+  let agentStatus = 'running'
+  const idle = { ...FILES }
+  delete idle['/proj/.claude/auto/current']
+  on('session.cwd', () => ({ value: '/proj' }))
+  on('clock.now', () => ({ value: new Date(2026, 10, 15, 12, 0, 0).getTime() }))
+  on('fs.exists', (_$, e) => ({ value: e.path in idle }))
+  on('fs.list', () => ({ value: [] }))
+  on('fs.read', (_$, e) => (idle[e.path] === undefined ? { deny: 'ENOENT' } : { value: idle[e.path]! }))
+  on('ui.open', () => ({ value: { isPlaced: true as const } }))
+  on('process.run', () => ({ deny: 'not macOS' }))
+  on('env.get', (_$, e) => ({ value: e.name === 'LANG' ? 'zh_CN.UTF-8' : undefined }))
+  on('agent.list', () => ({
+    value: [{ id: 'a1', description: 'review diff', type: 'code-reviewer', status: agentStatus as 'running' }],
+  }))
+  on('classic.SubagentStart', () => ({ value: {} }))
+  on('ui.status', (_$, e) => {
+    statuses.push(e.text)
+    return { value: undefined }
+  })
+  await $.command.run(RUN)
+  expect(statuses.at(-1)).not.toContain('子 agent')
+  await $.classic.SubagentStart({ agent_id: 'a1', agent_type: 'code-reviewer' })
+  expect(statuses.at(-1)).toContain('子 agent 1 个运行中')
+  const ui = await $.ui.mount({ plugin: 'task', surface: 'terminal', component: 'Pane', requestId: 'task-dash', props: PANE_PROPS })
+  expect(await ui.find({ type: 'Text', text: /子 agent 1 个运行中/ })).toBeDefined()
+  await ui.unmount()
+  expect((await $.command.run({ ...RUN, args: 'report' }))?.text).toContain('子 agent 1 个运行中')
+  // The engine says it is over though no SubagentStop arrived: the next read settles it.
+  agentStatus = 'completed'
+  await $.command.run({ ...RUN, args: 'report' })
+  expect(statuses.at(-1)).not.toContain('子 agent')
+})

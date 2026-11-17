@@ -172,12 +172,25 @@ function signatureOf(root: string | null, files: PoolFiles): string {
   return `${hash >>> 0}:${files.hasStopFile ? 1 : 0}:${files.inbox}`
 }
 
-function statusLine(snap: Snapshot, now: number): string | undefined {
+/**
+ * Work outside the loop: subagents this session runs while no loop task does, so
+ * the dashboard does not read 空闲 with work under way. A running loop's own
+ * worker is already the current task.
+ */
+function directWork(snap: Snapshot, agentList: AgentRow[]): string | undefined {
+  if (snap.loop === 'running') return undefined
+  const running = agentList.filter(a => a.status === 'running').length
+  return running ? L.directAgents(running) : undefined
+}
+
+function statusLine(snap: Snapshot, agentList: AgentRow[], now: number): string | undefined {
   const loopText = L.loop[snap.loop]
   if (!snap.initialized) return undefined
   const c = snap.counts
   const cur = snap.current
   const parts = [`${L.title} ● ${loopText}`]
+  const direct = directWork(snap, agentList)
+  if (direct) parts.push(direct)
   if (cur) {
     const title = snap.currentTitle.length > 24 ? `${snap.currentTitle.slice(0, 24)}…` : snap.currentTitle
     parts.push(`${cur.task} ${title}`.trim())
@@ -202,7 +215,8 @@ function reportText(snap: Snapshot, agentList: AgentRow[], now: number, all: boo
         .filter(Boolean)
         .join(' · ')
     : ''
-  out.push(`${L.title} [${name}] ● ${L.loop[snap.loop]}${snap.stopRequested && snap.loop === 'running' ? L.stopAfter : ''}${snap.loop === 'stale' ? L.staleHint : ''}`)
+  const direct = directWork(snap, agentList)
+  out.push(`${L.title} [${name}] ● ${L.loop[snap.loop]}${snap.stopRequested && snap.loop === 'running' ? L.stopAfter : ''}${snap.loop === 'stale' ? L.staleHint : ''}${direct ? ` · ${direct}` : ''}`)
   if (session) out.push(session)
   const cur = snap.current
   out.push('', `■ ${L.currentTask}`)
@@ -261,7 +275,7 @@ let lastStatus: string | undefined
 
 async function showStatus($: EngineInterface, snap: Snapshot | null, now: number) {
   await currentStrings($)
-  const text = snap && !(await read($, statusHidden)) ? statusLine(snap, now) : undefined
+  const text = snap && !(await read($, statusHidden)) ? statusLine(snap, await read($, agents), now) : undefined
   if (text !== lastStatus) {
     lastStatus = text
     $.ui.status(text)
@@ -284,6 +298,7 @@ async function readOnce($: EngineInterface) {
     lastSignature = signature
   }
   if (snap?.current || signature !== lastSignature) await update($, nowAtom, () => now)
+  await settleAgents($, now)
   await showStatus($, snap, now)
   if (await read($, lastError)) await update($, lastError, () => null)
 }
@@ -326,6 +341,20 @@ function refresh($: EngineInterface): Promise<void> {
 
 /** Agent tool calls' `name` by their `description`, to label the subagent `$.agent.list` reports. */
 const namesByDescription = new Map<string, string>()
+const ENDED = new Set(['completed', 'failed', 'killed'])
+
+/** Ends rows whose SubagentStop never came (the engine says the agent is over), so 运行中 cannot stick. */
+async function settleAgents($: EngineInterface, now: number) {
+  const list = await read($, agents)
+  if (!list.some(a => a.status === 'running')) return
+  const infos = await $.agent.list().catch(() => null)
+  if (!infos) return
+  const over = new Set(infos.filter(i => ENDED.has(i.status)).map(i => i.id))
+  if (!list.some(a => a.status === 'running' && over.has(a.id))) return
+  await update($, agents, rows =>
+    rows.map(a => (a.status === 'running' && over.has(a.id) ? { ...a, status: 'done' as const, endedAt: now } : a)),
+  )
+}
 
 function upsertAgent(list: AgentRow[], row: AgentRow): AgentRow[] {
   const rest = list.filter(a => a.id !== row.id)
@@ -462,6 +491,7 @@ async function drawPane($: EngineInterface, els: Els, cols: number) {
   await currentStrings($)
   const snap = await read($, snapshot)
   const err = await read($, lastError)
+  const direct = snap ? directWork(snap, await read($, agents)) : undefined
   const header = (
     <Box>
       <Box flexGrow={1}>
@@ -474,6 +504,7 @@ async function drawPane($: EngineInterface, els: Els, cols: number) {
             {snap.loop === 'stale' ? L.staleHint : ''}
           </Text>
         ) : null}
+        {direct ? <Text color="claude"> · {direct}</Text> : null}
       </Box>
       <Button key="refresh" hotkey="r" label={L.refresh} onPress={() => refresh($)} />
     </Box>
@@ -706,6 +737,7 @@ export const register: Register = (on, options) => {
         summary: '',
       }),
     )
+    await showStatus($, await read($, snapshot), now)
     return next(e)
   }).catch(($, e, next) => next(e))
 
@@ -730,6 +762,7 @@ export const register: Register = (on, options) => {
             },
       )
     })
+    await showStatus($, await read($, snapshot), now)
     void refresh($)
     return next(e)
   }).catch(($, e, next) => next(e))
