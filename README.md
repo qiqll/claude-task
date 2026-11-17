@@ -113,7 +113,24 @@ You can skip it: saying "add a task: …" or "T-0NN pick A" in the dispatcher se
 
 ## Pane and status line
 
-<p align="center"><img src="docs/promo/assets/x-2-panel.png" alt="/task-dash report on a demo task pool: current task, metrics, tasks, decisions, human blockers, recent log" width="820"></p>
+**How to open it**
+
+| You want | Do this |
+|---|---|
+| Live pane docked on the right (tall layout) | Start Claude Code in the fullscreen layout, `CLAUDE_CODE_NO_FLICKER=1 claude`, widen the terminal to at least 110 columns, then run `/task-dash` |
+| Full snapshot in the conversation (wide layout) | Run `/task-dash` in the normal layout, or `/task-dash report` anywhere (`report all` lists every task) |
+| Interactive pane without fullscreen | `/task-dash inline`; `Esc` closes it |
+| Hide or restore the status line | `/task-dash off` / `/task-dash on` |
+
+Wide layout, the full snapshot as it prints into the conversation:
+
+<p align="center"><img src="docs/promo/assets/dash-wide-en.png" alt="/task-dash full snapshot, wide layout, demo task pool" width="820"></p>
+
+Tall layout, the same sections stacked as in the side pane:
+
+<p align="center"><img src="docs/promo/assets/dash-tall-en.png" alt="/task-dash full snapshot, tall layout, demo task pool" width="480"></p>
+
+<sub>Real plugin output on a demo task pool.</sub>
 
 | Where | Shows | Controls |
 |---|---|---|

@@ -11,6 +11,7 @@
 | `assets/xhs-1-cover.png` … `xhs-5-install.png` | 1080×1440 | 小红书 / 即刻 / 朋友圈（3:4） |
 | `assets/x-1-hero.png` … `x-4-guardrails.png` | 1600×900 | X / Reddit / 掘金头图 / V2EX（16:9） |
 | `assets/x-zh-1-hero.png` … `x-zh-4-guardrails.png` | 1600×900 | 中文 16:9（掘金 / V2EX / 中文 README） |
+| `assets/dash-wide-{en,zh}.png` / `dash-tall-{en,zh}.png` | 1600 宽 / 960 宽，高度随内容 | `/task-dash` 完整快照横版 / 竖版（README 面板一节） |
 | `assets/landing-hero-{zh,en}.png` | 1440×900 | 落地页首屏截图 |
 | `assets/landing-full-{zh,en}.png` | 1440×全页 | 落地页长图 |
 | `assets/landing-mobile-{zh,en}.png` | 390×844 | 手机端截图 |

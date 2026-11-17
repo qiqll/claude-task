@@ -113,7 +113,24 @@ qtask -h
 
 ## 面板与状态行
 
-<p align="center"><img src="docs/promo/assets/x-zh-2-panel.png" alt="演示任务池上的 /task-dash report：当前任务、指标、任务列表、待决策、人工阻塞、最近流水" width="820"></p>
+**开启方法**
+
+| 想要 | 操作 |
+|---|---|
+| 右侧停靠的实时面板（竖版） | 用全屏布局启动 `CLAUDE_CODE_NO_FLICKER=1 claude`，终端拉宽到至少 110 列，再运行 `/task-dash` |
+| 在对话里输出完整快照（横版） | 普通布局下运行 `/task-dash`；任何布局下都可以用 `/task-dash report`（`report all` 列出全部任务） |
+| 不开全屏也要可交互面板 | `/task-dash inline`，`Esc` 关闭 |
+| 隐藏 / 恢复状态行 | `/task-dash off` / `/task-dash on` |
+
+横版：输出到对话里的完整快照
+
+<p align="center"><img src="docs/promo/assets/dash-wide-zh.png" alt="/task-dash 完整快照，横版，演示任务池" width="820"></p>
+
+竖版：同样的内容纵向排列，对应右侧面板的形态
+
+<p align="center"><img src="docs/promo/assets/dash-tall-zh.png" alt="/task-dash 完整快照，竖版，演示任务池" width="480"></p>
+
+<sub>插件真实输出，数据为演示任务池。</sub>
 
 | 位置 | 内容 | 操作 |
 |---|---|---|

@@ -36,6 +36,10 @@ code{font-family:var(--mono);background:rgba(240,149,95,.14);padding:.08em .35em
 .x .rails b{font-size:28px}.x .rails span{font-size:20px}.x .rails li{padding:22px 26px}.x .rails i{font-size:28px}
 .steps{margin:0 0 30px;padding-left:46px;font-size:36px;line-height:2}.note{color:var(--muted);font-size:28px;line-height:1.6;margin:30px 0 0}.x .note{font-size:22px}
 .foot{margin-top:auto;padding-top:30px;display:flex;justify-content:space-between;font:24px var(--mono);color:#7d776e}.x .foot{font-size:20px}
+.dash{padding:56px 64px 48px}.wide-card{width:1600px}.tall-card{width:960px}
+.dash .k{font-size:22px}.dash h2{font-size:44px;margin-bottom:28px}
+.full .body{max-height:none;white-space:pre-wrap;font-size:17px;line-height:1.5}.full .sl{font-size:16px;white-space:normal}
+.full.wide .body{columns:2;column-gap:44px}
 </style>
 <section id="xhs-1-cover" class="card xhs"><div class=k>Claude Code 插件 · 开源</div>
 <h1>让 Claude Code<br>自己<em>加班</em></h1><p class=sub>需求一股脑丢进任务池就去睡觉<br>后台 agent 逐个交付，测试由调度员亲自重跑</p>
@@ -281,3 +285,144 @@ Done 25% · Delivered 38% · First pass 100% · 7d delivered 2 · Median cycle 3
 <p class=note>随时加需求：在会话里说，或在任意终端 <code>qtask "…"</code>。正在做的任务不会被打断。</p><div class=foot><span>claude-task</span><span>qiqll.github.io/claude-task</span></div></section>
 
 <section id="x-zh-4-guardrails" class="card x"><div class=k>为什么敢放手</div><h2>五道<em>护栏</em></h2><ul class=rails><li><i>✓</i><div><b>不信 worker 自述</b><span>调度员亲自重跑测试才算完成</span></div></li><li><i>✓</i><div><b>防止测试被改弱</b><span>删用例、加 skip、断言变少都会被发现</span></div></li><li><i>✓</i><div><b>高风险先问你</b><span>schema、认证、计费、删数据、对外 API、部署、依赖</span></div></li><li><i>✓</i><div><b>失败自动回滚</b><span>保留 refs/auto-failed/* 供复盘</span></div></li><li><i>✓</i><div><b>不碰 main，从不 push</b><span>STOP 文件 / 预算 / 连续无进展都会停机</span></div></li></ul><div class=foot><span>claude-task</span><span>qiqll.github.io/claude-task</span></div></section>
+
+<section id="dash-wide-en" class="card dash wide-card"><div class=k>/task-dash · full snapshot</div><h2>Everything in <em>one view</em></h2><div class="term wide full"><div class=bar><i></i><i></i><i></i><span>claude · /task-dash report</span></div>
+<pre class=body>Task Pipeline [my-app] <span class=g>● Running</span>
+delivered 2/10 · running 1h 59m/8h
+
+<b class=a>■ Current task</b>
+  T-071 Add CSV export to orders
+  phase running · worker-T-071 · running 24m · base 9f3c2a1b
+
+Done 25% · Delivered 38% · First pass 100% · 7d delivered 2 · Median cycle 38m · WIP 1 · To verify 1 · Archived 2
+
+<b class=a>■ Tasks 6</b>
+  P1 T-071 <span class=a>[In progress]</span> Add CSV export to orders
+  P1 T-070 <span class=y>[Decision]</span> Migrate sessions table
+  P2 T-066 <span class=r>[Blocked]</span> Upgrade payment SDK
+  P1 T-069 <span class=g>[To verify]</span> Paginate audit log
+  P2 T-072 <span class=m>[To do]</span> Login page flicker
+  P2 T-073 <span class=m>[To do]</span> Document webhook retries
+
+<b class=a>■ Decisions 1 · answer in chat, e.g. &quot;T-0NN pick A&quot;</b>
+  T-070 Keep old sessions during migration?
+      A. Dual-write for a week (rec.); B. Hard cutover
+
+<b class=a>■ Human blockers</b>
+  H-003 Need sandbox API key from finance → T-066
+
+<b class=a>■ Recent log</b>
+  11-15 01:45 T-071 DISPATCH nonce=a4
+  11-15 01:44 T-070 NEEDS_DECISION→待决策 commits 0 | ~12m | 衍生 0 | schema change, two options
+  11-15 01:32 T-070 DISPATCH nonce=a3
+  11-15 01:31 T-069 DONE→待验证 commits 2 | ~38m | 衍生 0 | audit log pagination
+  11-15 00:53 T-069 DISPATCH nonce=a2
+  11-15 00:52 T-065 DONE→待验证 commits 3 | ~42m | 衍生 1 | rename config keys
+  11-15 00:10 T-065 DISPATCH nonce=a1
+  11-15 00:10 START max=10 hours=8</pre>
+<div class=sl><span class=g>●</span> Task Pipeline ● Running · T-071 Add CSV export to orders · 24m · To verify 1 · Decision 1 · Blocked 1 · /task-dash</div></div><div class=tag>Real plugin output · demo task pool</div></section>
+<section id="dash-wide-zh" class="card dash wide-card"><div class=k>/task-dash · 完整快照</div><h2>一屏看全<em>任务流水线</em></h2><div class="term wide full"><div class=bar><i></i><i></i><i></i><span>claude · /task-dash report</span></div>
+<pre class=body>任务流水线 [my-app] <span class=g>● 运行中</span>
+已交付 2/10 · 已运行 1h 59m/8h
+
+<b class=a>■ 当前任务</b>
+  T-071 订单列表加 CSV 导出
+  阶段 running · worker-T-071 · 已运行 24m · 基线 9f3c2a1b
+
+完成率 25% · 交付率 38% · 一次通过 100% · 7日交付 2 · 中位周期 38m · WIP 1 · 待验证 1 · 已归档 2
+
+<b class=a>■ 任务 6 条</b>
+  P1 T-071 <span class=a>[进行中]</span> 订单列表加 CSV 导出
+  P1 T-070 <span class=y>[待决策]</span> 会话表迁移
+  P2 T-066 <span class=r>[阻塞]</span> 升级支付 SDK
+  P1 T-069 <span class=g>[待验证]</span> 审计日志分页
+  P2 T-072 <span class=m>[待开始]</span> 登录页闪烁
+  P2 T-073 <span class=m>[待开始]</span> 补 webhook 重试文档
+
+<b class=a>■ 待决策 1 条 · 在会话里说「T-0NN 选 A」答复</b>
+  T-070 迁移期间保留旧会话吗？
+      A. 双写一周（推荐）；B. 直接切换
+
+<b class=a>■ 人工阻塞</b>
+  H-003 需要财务提供沙箱 API key → T-066
+
+<b class=a>■ 最近流水</b>
+  11-15 01:45 T-071 DISPATCH nonce=a4
+  11-15 01:44 T-070 NEEDS_DECISION→待决策 commits 0 | ~12m | 衍生 0 | 涉及 schema，两种做法
+  11-15 01:32 T-070 DISPATCH nonce=a3
+  11-15 01:31 T-069 DONE→待验证 commits 2 | ~38m | 衍生 0 | 审计日志分页
+  11-15 00:53 T-069 DISPATCH nonce=a2
+  11-15 00:52 T-065 DONE→待验证 commits 3 | ~42m | 衍生 1 | 配置项改名
+  11-15 00:10 T-065 DISPATCH nonce=a1
+  11-15 00:10 START max=10 hours=8</pre>
+<div class=sl><span class=g>●</span> 任务流水线 ● 运行中 · T-071 订单列表加 CSV 导出 · 24m · 待验证 1 · 待决策 1 · 阻塞 1 · /task-dash</div></div><div class=tag>插件真实输出 · 演示用任务池</div></section>
+<section id="dash-tall-en" class="card dash tall-card"><div class=k>/task-dash · full snapshot</div><h2>Everything in <em>one view</em></h2><div class="term full"><div class=bar><i></i><i></i><i></i><span>claude · /task-dash report</span></div>
+<pre class=body>Task Pipeline [my-app] <span class=g>● Running</span>
+delivered 2/10 · running 1h 59m/8h
+
+<b class=a>■ Current task</b>
+  T-071 Add CSV export to orders
+  phase running · worker-T-071 · running 24m · base 9f3c2a1b
+
+Done 25% · Delivered 38% · First pass 100% · 7d delivered 2 · Median cycle 38m · WIP 1 · To verify 1 · Archived 2
+
+<b class=a>■ Tasks 6</b>
+  P1 T-071 <span class=a>[In progress]</span> Add CSV export to orders
+  P1 T-070 <span class=y>[Decision]</span> Migrate sessions table
+  P2 T-066 <span class=r>[Blocked]</span> Upgrade payment SDK
+  P1 T-069 <span class=g>[To verify]</span> Paginate audit log
+  P2 T-072 <span class=m>[To do]</span> Login page flicker
+  P2 T-073 <span class=m>[To do]</span> Document webhook retries
+
+<b class=a>■ Decisions 1 · answer in chat, e.g. &quot;T-0NN pick A&quot;</b>
+  T-070 Keep old sessions during migration?
+      A. Dual-write for a week (rec.); B. Hard cutover
+
+<b class=a>■ Human blockers</b>
+  H-003 Need sandbox API key from finance → T-066
+
+<b class=a>■ Recent log</b>
+  11-15 01:45 T-071 DISPATCH nonce=a4
+  11-15 01:44 T-070 NEEDS_DECISION→待决策 commits 0 | ~12m | 衍生 0 | schema change, two options
+  11-15 01:32 T-070 DISPATCH nonce=a3
+  11-15 01:31 T-069 DONE→待验证 commits 2 | ~38m | 衍生 0 | audit log pagination
+  11-15 00:53 T-069 DISPATCH nonce=a2
+  11-15 00:52 T-065 DONE→待验证 commits 3 | ~42m | 衍生 1 | rename config keys
+  11-15 00:10 T-065 DISPATCH nonce=a1
+  11-15 00:10 START max=10 hours=8</pre>
+<div class=sl><span class=g>●</span> Task Pipeline ● Running · T-071 Add CSV export to orders · 24m · To verify 1 · Decision 1 · Blocked 1 · /task-dash</div></div><div class=tag>Real plugin output · demo task pool</div></section>
+<section id="dash-tall-zh" class="card dash tall-card"><div class=k>/task-dash · 完整快照</div><h2>一屏看全<em>任务流水线</em></h2><div class="term full"><div class=bar><i></i><i></i><i></i><span>claude · /task-dash report</span></div>
+<pre class=body>任务流水线 [my-app] <span class=g>● 运行中</span>
+已交付 2/10 · 已运行 1h 59m/8h
+
+<b class=a>■ 当前任务</b>
+  T-071 订单列表加 CSV 导出
+  阶段 running · worker-T-071 · 已运行 24m · 基线 9f3c2a1b
+
+完成率 25% · 交付率 38% · 一次通过 100% · 7日交付 2 · 中位周期 38m · WIP 1 · 待验证 1 · 已归档 2
+
+<b class=a>■ 任务 6 条</b>
+  P1 T-071 <span class=a>[进行中]</span> 订单列表加 CSV 导出
+  P1 T-070 <span class=y>[待决策]</span> 会话表迁移
+  P2 T-066 <span class=r>[阻塞]</span> 升级支付 SDK
+  P1 T-069 <span class=g>[待验证]</span> 审计日志分页
+  P2 T-072 <span class=m>[待开始]</span> 登录页闪烁
+  P2 T-073 <span class=m>[待开始]</span> 补 webhook 重试文档
+
+<b class=a>■ 待决策 1 条 · 在会话里说「T-0NN 选 A」答复</b>
+  T-070 迁移期间保留旧会话吗？
+      A. 双写一周（推荐）；B. 直接切换
+
+<b class=a>■ 人工阻塞</b>
+  H-003 需要财务提供沙箱 API key → T-066
+
+<b class=a>■ 最近流水</b>
+  11-15 01:45 T-071 DISPATCH nonce=a4
+  11-15 01:44 T-070 NEEDS_DECISION→待决策 commits 0 | ~12m | 衍生 0 | 涉及 schema，两种做法
+  11-15 01:32 T-070 DISPATCH nonce=a3
+  11-15 01:31 T-069 DONE→待验证 commits 2 | ~38m | 衍生 0 | 审计日志分页
+  11-15 00:53 T-069 DISPATCH nonce=a2
+  11-15 00:52 T-065 DONE→待验证 commits 3 | ~42m | 衍生 1 | 配置项改名
+  11-15 00:10 T-065 DISPATCH nonce=a1
+  11-15 00:10 START max=10 hours=8</pre>
+<div class=sl><span class=g>●</span> 任务流水线 ● 运行中 · T-071 订单列表加 CSV 导出 · 24m · 待验证 1 · 待决策 1 · 阻塞 1 · /task-dash</div></div><div class=tag>插件真实输出 · 演示用任务池</div></section>
