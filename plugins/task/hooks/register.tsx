@@ -178,18 +178,18 @@ function signatureOf(root: string | null, files: PoolFiles): string {
  * worker is already the current task.
  */
 function directWork(snap: Snapshot, agentList: AgentRow[]): string | undefined {
-  if (snap.loop === 'running') return undefined
-  const running = agentList.filter(a => a.status === 'running').length
+  if (snap.loop === 'running' || snap.loop === 'waiting') return undefined
+  const running = agentList.filter(a => a.status === 'running' && !parked.has(a.id)).length
   return running ? L.directAgents(running) : undefined
 }
 
 function statusLine(snap: Snapshot, agentList: AgentRow[], now: number): string | undefined {
   const loopText = L.loop[snap.loop]
-  if (!snap.initialized) return undefined
+  const direct = directWork(snap, agentList)
+  if (!snap.initialized) return direct ? `${L.title} ● ${direct}` : undefined
   const c = snap.counts
   const cur = snap.current
   const parts = [`${L.title} ● ${loopText}`]
-  const direct = directWork(snap, agentList)
   if (direct) parts.push(direct)
   if (cur) {
     const title = snap.currentTitle.length > 24 ? `${snap.currentTitle.slice(0, 24)}…` : snap.currentTitle
@@ -298,7 +298,6 @@ async function readOnce($: EngineInterface) {
     lastSignature = signature
   }
   if (snap?.current || signature !== lastSignature) await update($, nowAtom, () => now)
-  await settleAgents($, now)
   await showStatus($, snap, now)
   if (await read($, lastError)) await update($, lastError, () => null)
 }
@@ -328,8 +327,10 @@ function refresh($: EngineInterface): Promise<void> {
       try {
         await readOnce($)
       } catch (err) {
-        await update($, lastError, () => (err instanceof Error ? err.message : String(err)))
+        await update($, lastError, () => (err instanceof Error ? err.message : String(err))).catch(() => undefined)
       }
+      // Apart from the pool read, so a failing read does not leave 运行中 standing.
+      await settleAgents($).catch(() => undefined)
     } while (again && mine === generation)
     if (mine === generation) refreshing = null
   })()
@@ -342,18 +343,36 @@ function refresh($: EngineInterface): Promise<void> {
 /** Agent tool calls' `name` by their `description`, to label the subagent `$.agent.list` reports. */
 const namesByDescription = new Map<string, string>()
 const ENDED = new Set(['completed', 'failed', 'killed'])
+const PARKED = new Set(['idle', 'waiting'])
+/** A row this young may not be listed yet; it is not ended for being missing. */
+const SETTLE_GRACE_MS = 5000
+/** Running rows the engine reports idle or waiting (a teammate between messages): not counted as work. */
+let parked = new Set<string>()
 
-/** Ends rows whose SubagentStop never came (the engine says the agent is over), so 运行中 cannot stick. */
-async function settleAgents($: EngineInterface, now: number) {
+/**
+ * Ends rows whose SubagentStop never came: the engine says the agent is over, or
+ * has dropped it from its list. Then redraws the status line.
+ */
+async function settleAgents($: EngineInterface) {
   const list = await read($, agents)
-  if (!list.some(a => a.status === 'running')) return
-  const infos = await $.agent.list().catch(() => null)
-  if (!infos) return
-  const over = new Set(infos.filter(i => ENDED.has(i.status)).map(i => i.id))
-  if (!list.some(a => a.status === 'running' && over.has(a.id))) return
-  await update($, agents, rows =>
-    rows.map(a => (a.status === 'running' && over.has(a.id) ? { ...a, status: 'done' as const, endedAt: now } : a)),
-  )
+  if (list.some(a => a.status === 'running')) {
+    const infos = await $.agent.list().catch(() => null)
+    if (infos) {
+      const now = await $.clock.now()
+      const live = new Map(infos.map(i => [i.id, i.status as string]))
+      const isOver = (a: AgentRow) => {
+        const status = live.get(a.id)
+        return status === undefined ? now - a.startedAt > SETTLE_GRACE_MS : ENDED.has(status)
+      }
+      parked = new Set(infos.filter(i => PARKED.has(i.status)).map(i => i.id))
+      if (list.some(a => a.status === 'running' && isOver(a))) {
+        await update($, agents, rows =>
+          rows.map(a => (a.status === 'running' && isOver(a) ? { ...a, status: 'done' as const, endedAt: now } : a)),
+        )
+      }
+    }
+  }
+  await showStatus($, await read($, snapshot), await $.clock.now())
 }
 
 function upsertAgent(list: AgentRow[], row: AgentRow): AgentRow[] {
@@ -738,6 +757,7 @@ export const register: Register = (on, options) => {
       }),
     )
     await showStatus($, await read($, snapshot), now)
+    void refresh($)
     return next(e)
   }).catch(($, e, next) => next(e))
 

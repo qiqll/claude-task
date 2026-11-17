@@ -188,7 +188,9 @@ test('direct subagents show while no loop runs, and a missed stop does not stick
   const statuses: (string | undefined)[] = []
   let agentStatus = 'running'
   const idle = { ...FILES }
+  // No loop at all: no worker, no run log.
   delete idle['/proj/.claude/auto/current']
+  delete idle['/proj/.claude/auto/run.log']
   on('session.cwd', () => ({ value: '/proj' }))
   on('clock.now', () => ({ value: new Date(2026, 10, 15, 12, 0, 0).getTime() }))
   on('fs.exists', (_$, e) => ({ value: e.path in idle }))
@@ -200,7 +202,7 @@ test('direct subagents show while no loop runs, and a missed stop does not stick
   on('agent.list', () => ({
     value: [{ id: 'a1', description: 'review diff', type: 'code-reviewer', status: agentStatus as 'running' }],
   }))
-  on('classic.SubagentStart', () => ({ value: {} }))
+  on('classic.SubagentStart', () => ({}))
   on('ui.status', (_$, e) => {
     statuses.push(e.text)
     return { value: undefined }
@@ -213,8 +215,46 @@ test('direct subagents show while no loop runs, and a missed stop does not stick
   expect(await ui.find({ type: 'Text', text: /子 agent 1 个运行中/ })).toBeDefined()
   await ui.unmount()
   expect((await $.command.run({ ...RUN, args: 'report' }))?.text).toContain('子 agent 1 个运行中')
+  // A teammate waiting for a message is not work under way.
+  agentStatus = 'idle'
+  await $.command.run({ ...RUN, args: 'report' })
+  expect(statuses.at(-1)).not.toContain('子 agent')
+  agentStatus = 'running'
+  await $.command.run({ ...RUN, args: 'report' })
+  expect(statuses.at(-1)).toContain('子 agent 1 个运行中')
   // The engine says it is over though no SubagentStop arrived: the next read settles it.
   agentStatus = 'completed'
   await $.command.run({ ...RUN, args: 'report' })
   expect(statuses.at(-1)).not.toContain('子 agent')
+})
+
+test('a subagent dropped from the engine list without a stop is settled, even when the pool read fails', async ($, on) => {
+  const statuses: (string | undefined)[] = []
+  let t = new Date(2026, 10, 15, 12, 0, 0).getTime()
+  let listed = true
+  on('session.cwd', () => ({ value: '/proj' }))
+  on('clock.now', () => ({ value: t }))
+  on('fs.exists', () => ({ value: false }))
+  on('fs.list', () => ({ value: [] }))
+  on('fs.read', () => ({ deny: 'ENOENT' }))
+  on('ui.open', () => ({ value: { isPlaced: true as const } }))
+  on('process.run', () => ({ deny: 'not macOS' }))
+  on('env.get', (_$, e) => ({ value: e.name === 'LANG' ? 'zh_CN.UTF-8' : undefined }))
+  on('agent.list', () => ({ value: listed ? [{ id: 'a1', description: 'x', type: 'Explore', status: 'running' as const }] : [] }))
+  on('classic.SubagentStart', () => ({}))
+  on('ui.status', (_$, e) => {
+    statuses.push(e.text)
+    return { value: undefined }
+  })
+  await $.command.run(RUN)
+  await $.classic.SubagentStart({ agent_id: 'a1', agent_type: 'Explore' })
+  // No pool here: the status line still says work is under way.
+  expect(statuses.at(-1)).toContain('子 agent 1 个运行中')
+  // Gone from the list, but too young to be judged missing.
+  listed = false
+  await $.command.run({ ...RUN, args: 'report' })
+  expect(statuses.at(-1)).toContain('子 agent 1 个运行中')
+  t += 10_000
+  await $.command.run({ ...RUN, args: 'report' })
+  expect(statuses.at(-1)).toBeUndefined()
 })
