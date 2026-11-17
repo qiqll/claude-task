@@ -122,15 +122,19 @@ qtask -h
 | 不开全屏也要可交互面板 | `/task-dash inline`，`Esc` 关闭 |
 | 隐藏 / 恢复状态行 | `/task-dash off` / `/task-dash on` |
 
-横版：输出到对话里的完整快照
+全屏布局下停靠在对话右侧：
+
+<p align="center"><img src="docs/promo/assets/dash-dock-zh.png" alt="/task-dash 面板停靠在对话右侧，演示任务池" width="820"></p>
+
+面板本身：当前任务、指标卡、可筛选的任务列表（点开一行看验收标准）、待决策、人工阻塞、Agent、最近流水：
+
+<p align="center"><img src="docs/promo/assets/dash-pane-zh.png" alt="/task-dash 右侧面板，演示任务池" width="480"></p>
+
+不开全屏时，`/task-dash` 把同样的内容以横版文字快照输出到对话里：
 
 <p align="center"><img src="docs/promo/assets/dash-wide-zh.png" alt="/task-dash 完整快照，横版，演示任务池" width="820"></p>
 
-竖版：同样的内容纵向排列，对应右侧面板的形态
-
-<p align="center"><img src="docs/promo/assets/dash-tall-zh.png" alt="/task-dash 完整快照，竖版，演示任务池" width="480"></p>
-
-<sub>插件真实输出，数据为演示任务池。</sub>
+<sub>数据为演示任务池。面板图是按真实面板布局绘制的示意图，文字快照是插件真实输出。</sub>
 
 | 位置 | 内容 | 操作 |
 |---|---|---|

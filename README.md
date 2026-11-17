@@ -122,15 +122,19 @@ You can skip it: saying "add a task: …" or "T-0NN pick A" in the dispatcher se
 | Interactive pane without fullscreen | `/task-dash inline`; `Esc` closes it |
 | Hide or restore the status line | `/task-dash off` / `/task-dash on` |
 
-Wide layout, the full snapshot as it prints into the conversation:
+Docked on the right in the fullscreen layout, next to the conversation:
+
+<p align="center"><img src="docs/promo/assets/dash-dock-en.png" alt="/task-dash pane docked beside the conversation, demo task pool" width="820"></p>
+
+The pane on its own: current task, metric tiles, filterable tasks (click a row for its acceptance criteria), decisions, human blockers, agents, recent log:
+
+<p align="center"><img src="docs/promo/assets/dash-pane-en.png" alt="/task-dash side pane, demo task pool" width="480"></p>
+
+Without fullscreen, `/task-dash` prints the same content as a wide text snapshot:
 
 <p align="center"><img src="docs/promo/assets/dash-wide-en.png" alt="/task-dash full snapshot, wide layout, demo task pool" width="820"></p>
 
-Tall layout, the same sections stacked as in the side pane:
-
-<p align="center"><img src="docs/promo/assets/dash-tall-en.png" alt="/task-dash full snapshot, tall layout, demo task pool" width="480"></p>
-
-<sub>Real plugin output on a demo task pool.</sub>
+<sub>Demo task pool. The pane images are illustrations drawn after the real pane's layout; the text snapshot is real plugin output.</sub>
 
 | Where | Shows | Controls |
 |---|---|---|

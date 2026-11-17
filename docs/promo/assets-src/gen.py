@@ -78,8 +78,6 @@ cards = f'''
 
 <section id="dash-wide-en" class="card dash wide-card"><div class=k>/task-dash · full snapshot</div><h2>Everything in <em>one view</em></h2>{term('en_US.UTF-8','wide full')}{demo_en}</section>
 <section id="dash-wide-zh" class="card dash wide-card"><div class=k>/task-dash · 完整快照</div><h2>一屏看全<em>任务流水线</em></h2>{term('zh_CN.UTF-8','wide full')}{demo_zh}</section>
-<section id="dash-tall-en" class="card dash tall-card"><div class=k>/task-dash · full snapshot</div><h2>Everything in <em>one view</em></h2>{term('en_US.UTF-8','full')}{demo_en}</section>
-<section id="dash-tall-zh" class="card dash tall-card"><div class=k>/task-dash · 完整快照</div><h2>一屏看全<em>任务流水线</em></h2>{term('zh_CN.UTF-8','full')}{demo_zh}</section>
 '''
 css = '''
 :root{--bg:#12110f;--surface:#1f1d1a;--border:#34302b;--text:#f2efe9;--muted:#b3ada3;--accent:#f0955f;--term:#0d0c0b;
@@ -119,7 +117,7 @@ code{font-family:var(--mono);background:rgba(240,149,95,.14);padding:.08em .35em
 .x .rails b{font-size:28px}.x .rails span{font-size:20px}.x .rails li{padding:22px 26px}.x .rails i{font-size:28px}
 .steps{margin:0 0 30px;padding-left:46px;font-size:36px;line-height:2}.note{color:var(--muted);font-size:28px;line-height:1.6;margin:30px 0 0}.x .note{font-size:22px}
 .foot{margin-top:auto;padding-top:30px;display:flex;justify-content:space-between;font:24px var(--mono);color:#7d776e}.x .foot{font-size:20px}
-.dash{padding:56px 64px 48px}.wide-card{width:1600px}.tall-card{width:960px}
+.dash{padding:56px 64px 48px}.wide-card{width:1600px}
 .dash .k{font-size:22px}.dash h2{font-size:44px;margin-bottom:28px}
 .full .body{max-height:none;white-space:pre-wrap;font-size:17px;line-height:1.5}.full .sl{font-size:16px;white-space:normal}
 .full.wide .body{columns:2;column-gap:44px}

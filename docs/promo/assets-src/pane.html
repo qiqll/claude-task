@@ -1,0 +1,105 @@
+<!doctype html><meta charset=utf-8><title>task-dash pane</title><style>
+:root{--bg:#12110f;--win:#1a1917;--pane:#161513;--line:#2e2a26;--text:#ece7df;--muted:#8f887e;--accent:#f0955f;
+--mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,"PingFang SC",monospace}
+*{box-sizing:border-box}body{margin:0;background:#000;color:var(--text);font-family:var(--mono)}
+.card{background:radial-gradient(900px 500px at 85% -10%,rgba(240,149,95,.16),transparent 60%),var(--bg);padding:48px 52px 36px;margin:0 0 40px}
+.tall{width:820px}.wide{width:1600px}
+.win{background:var(--win);border:1px solid var(--line);border-radius:16px;overflow:hidden;box-shadow:0 30px 80px rgba(0,0,0,.55)}
+.bar{display:flex;gap:9px;align-items:center;padding:13px 18px;border-bottom:1px solid var(--line);color:#76706a;font-size:15px}
+.bar i{width:12px;height:12px;border-radius:50%;background:#3a3633}.bar span{margin-left:10px}
+.tag{margin-top:16px;color:#7d776e;font-size:15px}
+.pane{background:var(--pane);padding:20px 24px 18px;font-size:16px;line-height:1.55}
+.wide .pane{flex:0 0 620px;min-width:0;border-left:1px solid var(--line)}
+.head{display:flex;justify-content:space-between;align-items:center}
+.btn{border:1px solid var(--line);border-radius:8px;padding:2px 10px;color:var(--muted);font-size:14px}
+h4{margin:18px 0 8px;padding-top:14px;border-top:1px solid var(--line);font-size:15px;color:var(--accent);letter-spacing:.02em}
+.small{font-size:14px}.dim{color:var(--muted)}
+.a{color:var(--accent)}.g{color:#8fd19e}.y{color:#e8c66a}.r{color:#ef7f7f}.m{color:#8d877e}
+.curcard{border:1px solid rgba(240,149,95,.45);background:rgba(240,149,95,.07);border-radius:10px;padding:10px 14px}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:12px}
+.stat{background:#1d1b19;border:1px solid var(--line);border-radius:9px;padding:6px 10px;display:flex;flex-direction:column}
+.stat i{font-style:normal;color:var(--muted);font-size:12.5px}.stat b{font-size:19px}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px}
+.chip{border:1px solid var(--line);border-radius:999px;padding:1px 11px;font-size:13.5px;color:var(--muted)}
+.chip.on{border-color:var(--accent);color:var(--accent);background:rgba(240,149,95,.12)}
+.row{display:flex;align-items:center;gap:8px;padding:4px 8px;border-radius:7px}.row.cur{background:#211f1c}
+.pri{font-size:14px;width:22px}.caret{color:var(--muted)}.id{color:var(--text)}
+.tt{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pill{font-size:12.5px;border-radius:999px;padding:0 9px;border:1px solid currentColor;opacity:.95}
+.detail{margin:2px 0 6px 64px;color:var(--muted);font-size:13.5px;line-height:1.5}
+.dec div:last-child{padding-left:56px}
+.agent,.log{display:flex;gap:8px;align-items:baseline}.agent .dim{font-size:13.5px}
+.log{font-size:14px}.log .dim{flex:none}
+.foot{margin-top:14px;font-size:12.5px}
+.split{display:flex;width:100%}
+.chat{flex:1;min-width:0;display:flex;flex-direction:column;padding:26px 30px 18px;font-size:17px;line-height:1.55}
+.msg{display:flex;gap:12px;margin-bottom:16px}.msg p{margin:0}.msg span{flex:none;color:var(--muted)}
+.msg.you p{color:#cfc9bf}.msg.ai span{color:var(--accent)}
+.spacer{flex:1}
+.prompt{border:1px solid var(--line);border-radius:10px;padding:12px 16px;color:var(--text)}
+.cursor{display:inline-block;width:9px;height:19px;background:var(--accent);vertical-align:-3px;margin-left:3px}
+.sl{margin-top:10px;font-size:14px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+</style><section id="dash-pane-en" class="card tall"><div class=win><div class=bar><i></i><i></i><i></i><span>claude — my-app</span></div><div class=pane>
+<div class=head><div><b>Task Pipeline</b> <span class=dim>[my-app]</span> <span class=g>● Running</span></div><span class=btn>⟳ Refresh</span></div>
+<div class="dim small">~/code/my-app · delivered 2/10 · running 1h 59m/8h</div>
+<h4>Current task</h4>
+<div class=curcard><div><b class=a>T-071</b> <b>Add CSV export to orders</b></div><div class="dim small">phase running · worker-T-071 · running 24m · base 9f3c2a1b</div></div>
+<div class=stats><span class=stat><i>Done</i> <b class=g>25%</b></span><span class=stat><i>Delivered</i> <b class=a>38%</b></span><span class=stat><i>First pass</i> <b class=g>100%</b></span><span class=stat><i>7d delivered</i> <b class=g>2</b></span><span class=stat><i>Median cycle</i> <b class=>38m</b></span><span class=stat><i>WIP</i> <b class=g>1</b></span><span class=stat><i>To verify</i> <b class=y>1</b></span><span class=stat><i>Archived</i> <b class=>2</b></span></div>
+<h4>Tasks <span class=dim>6</span></h4>
+<div class=chips><span class="chip on">Active 4</span><span class="chip">To do 2</span><span class="chip">To verify 1</span><span class="chip">Decision 1</span><span class="chip">Blocked 1</span><span class="chip">All 6</span></div><div class="row cur"><span class="pri y">P1</span><span class=caret>▾</span><span class=id>T-071</span><span class=tt>Add CSV export to orders</span><span class="pill a">In progress</span></div><div class=detail><div>orders · depends on T-064</div><div>Acceptance: GET /orders/export returns CSV; pytest tests/test_export.py passes</div></div><div class="row"><span class="pri y">P1</span><span class=caret>▸</span><span class=id>T-070</span><span class=tt>Migrate sessions table</span><span class="pill y">Decision</span></div><div class="row"><span class="pri m">P2</span><span class=caret>▸</span><span class=id>T-066</span><span class=tt>Upgrade payment SDK</span><span class="pill r">Blocked</span></div><div class="row"><span class="pri y">P1</span><span class=caret>▸</span><span class=id>T-069</span><span class=tt>Paginate audit log</span><span class="pill y">To verify</span></div>
+<h4>Decisions <span class=dim>1 · answer in chat, e.g. &quot;T-0NN pick A&quot;</span></h4>
+<div class=dec><div><b class=y>T-070</b> Keep old sessions during migration?</div><div class=dim>A. Dual-write for a week (rec.); B. Hard cutover</div></div>
+<h4>Human blockers</h4>
+<div class=blk><b class=r>H-003</b> Need sandbox API key from finance <span class=dim>→ T-066</span></div>
+<h4>Agents <span class=dim>1 running</span></h4><div class=agent><span class="g">●</span><span class=tt>T-071 · Add CSV export to orders</span><span class=dim>general-purpose · running 24m</span></div><div class=agent><span class="m">○</span><span class=tt>T-069 · Paginate audit log</span><span class=dim>general-purpose · finished 38m</span></div>
+<h4>Recent log <span class=dim>8</span></h4><div class=log><span class=dim>11-15 01:45</span> <span class="a">T-071</span> <span class=tt>DISPATCH nonce=a4</span></div><div class=log><span class=dim>11-15 01:44</span> <span class="a">T-070</span> <span class=tt>NEEDS_DECISION schema change, two options</span></div><div class=log><span class=dim>11-15 01:32</span> <span class="a">T-070</span> <span class=tt>DISPATCH nonce=a3</span></div><div class=log><span class=dim>11-15 01:31</span> <span class="a">T-069</span> <span class=tt>DONE commits 2 · ~38m · audit log pagination</span></div><div class=log><span class=dim>11-15 00:53</span> <span class="a">T-069</span> <span class=tt>DISPATCH nonce=a2</span></div><div class=log><span class=dim>11-15 00:10</span> <span class="g">START</span> <span class=tt>max=10 hours=8</span></div>
+<div class="foot dim">Read-only · refreshes every 5s · from .claude/backlog.md and .claude/auto/</div>
+</div></div><div class=tag>Illustration · demo task pool · layout of the real docked pane</div></section>
+<section id="dash-dock-en" class="card wide"><div class=win><div class=bar><i></i><i></i><i></i><span>claude — my-app</span></div><div class=split><div class=chat><div class="msg you"><span>›</span><p>/task:loop</p></div><div class="msg ai"><span>⏺</span><p>Loop started: max 10 tasks, 8h. Dispatching T-065 to a fresh worker.</p></div><div class="msg ai"><span>⏺</span><p>T-069 delivered: tests re-run by me, 214 passed. → To verify.</p></div><div class="msg ai"><span>⏺</span><p>T-070 touches the schema and has two options; parked in Decisions, moving on.</p></div><div class="msg you"><span>›</span><p>add a task: login page flickers on Safari</p></div><div class="msg ai"><span>⏺</span><p>Added T-072 (P2). Current task T-071 keeps running.</p></div><div class=spacer></div><div class=prompt>› T-070 pick A<b class=cursor></b></div><div class=sl>Task Pipeline ● Running · T-071 Add CSV export to orders · 24m · To verify 1 · Decision 1 · Blocked 1 · /task-dash</div></div><div class=pane>
+<div class=head><div><b>Task Pipeline</b> <span class=dim>[my-app]</span> <span class=g>● Running</span></div><span class=btn>⟳ Refresh</span></div>
+<div class="dim small">~/code/my-app · delivered 2/10 · running 1h 59m/8h</div>
+<h4>Current task</h4>
+<div class=curcard><div><b class=a>T-071</b> <b>Add CSV export to orders</b></div><div class="dim small">phase running · worker-T-071 · running 24m · base 9f3c2a1b</div></div>
+<div class=stats><span class=stat><i>Done</i> <b class=g>25%</b></span><span class=stat><i>Delivered</i> <b class=a>38%</b></span><span class=stat><i>First pass</i> <b class=g>100%</b></span><span class=stat><i>7d delivered</i> <b class=g>2</b></span><span class=stat><i>Median cycle</i> <b class=>38m</b></span><span class=stat><i>WIP</i> <b class=g>1</b></span><span class=stat><i>To verify</i> <b class=y>1</b></span><span class=stat><i>Archived</i> <b class=>2</b></span></div>
+<h4>Tasks <span class=dim>6</span></h4>
+<div class=chips><span class="chip on">Active 4</span><span class="chip">To do 2</span><span class="chip">To verify 1</span><span class="chip">Decision 1</span><span class="chip">Blocked 1</span><span class="chip">All 6</span></div><div class="row cur"><span class="pri y">P1</span><span class=caret>▾</span><span class=id>T-071</span><span class=tt>Add CSV export to orders</span><span class="pill a">In progress</span></div><div class=detail><div>orders · depends on T-064</div><div>Acceptance: GET /orders/export returns CSV; pytest tests/test_export.py passes</div></div><div class="row"><span class="pri y">P1</span><span class=caret>▸</span><span class=id>T-070</span><span class=tt>Migrate sessions table</span><span class="pill y">Decision</span></div><div class="row"><span class="pri m">P2</span><span class=caret>▸</span><span class=id>T-066</span><span class=tt>Upgrade payment SDK</span><span class="pill r">Blocked</span></div><div class="row"><span class="pri y">P1</span><span class=caret>▸</span><span class=id>T-069</span><span class=tt>Paginate audit log</span><span class="pill y">To verify</span></div>
+<h4>Decisions <span class=dim>1 · answer in chat, e.g. &quot;T-0NN pick A&quot;</span></h4>
+<div class=dec><div><b class=y>T-070</b> Keep old sessions during migration?</div><div class=dim>A. Dual-write for a week (rec.); B. Hard cutover</div></div>
+<h4>Human blockers</h4>
+<div class=blk><b class=r>H-003</b> Need sandbox API key from finance <span class=dim>→ T-066</span></div>
+<h4>Agents <span class=dim>1 running</span></h4><div class=agent><span class="g">●</span><span class=tt>T-071 · Add CSV export to orders</span><span class=dim>general-purpose · running 24m</span></div><div class=agent><span class="m">○</span><span class=tt>T-069 · Paginate audit log</span><span class=dim>general-purpose · finished 38m</span></div>
+<h4>Recent log <span class=dim>8</span></h4><div class=log><span class=dim>11-15 01:45</span> <span class="a">T-071</span> <span class=tt>DISPATCH nonce=a4</span></div><div class=log><span class=dim>11-15 01:44</span> <span class="a">T-070</span> <span class=tt>NEEDS_DECISION schema change, two options</span></div><div class=log><span class=dim>11-15 01:32</span> <span class="a">T-070</span> <span class=tt>DISPATCH nonce=a3</span></div><div class=log><span class=dim>11-15 01:31</span> <span class="a">T-069</span> <span class=tt>DONE commits 2 · ~38m · audit log pagination</span></div><div class=log><span class=dim>11-15 00:53</span> <span class="a">T-069</span> <span class=tt>DISPATCH nonce=a2</span></div><div class=log><span class=dim>11-15 00:10</span> <span class="g">START</span> <span class=tt>max=10 hours=8</span></div>
+<div class="foot dim">Read-only · refreshes every 5s · from .claude/backlog.md and .claude/auto/</div>
+</div></div></div><div class=tag>Illustration · demo task pool · layout of the real docked pane</div></section>
+<section id="dash-pane-zh" class="card tall"><div class=win><div class=bar><i></i><i></i><i></i><span>claude — my-app</span></div><div class=pane>
+<div class=head><div><b>任务流水线</b> <span class=dim>[my-app]</span> <span class=g>● 运行中</span></div><span class=btn>⟳ 刷新</span></div>
+<div class="dim small">~/code/my-app · 已交付 2/10 · 已运行 1h 59m/8h</div>
+<h4>当前任务</h4>
+<div class=curcard><div><b class=a>T-071</b> <b>订单列表加 CSV 导出</b></div><div class="dim small">阶段 running · worker-T-071 · 已运行 24m · 基线 9f3c2a1b</div></div>
+<div class=stats><span class=stat><i>完成率</i> <b class=g>25%</b></span><span class=stat><i>交付率</i> <b class=a>38%</b></span><span class=stat><i>一次通过</i> <b class=g>100%</b></span><span class=stat><i>7日交付</i> <b class=g>2</b></span><span class=stat><i>中位周期</i> <b class=>38m</b></span><span class=stat><i>WIP</i> <b class=g>1</b></span><span class=stat><i>待验证</i> <b class=y>1</b></span><span class=stat><i>已归档</i> <b class=>2</b></span></div>
+<h4>任务 <span class=dim>6</span></h4>
+<div class=chips><span class="chip on">活跃 4</span><span class="chip">待开始 2</span><span class="chip">待验证 1</span><span class="chip">待决策 1</span><span class="chip">阻塞 1</span><span class="chip">全部 6</span></div><div class="row cur"><span class="pri y">P1</span><span class=caret>▾</span><span class=id>T-071</span><span class=tt>订单列表加 CSV 导出</span><span class="pill a">进行中</span></div><div class=detail><div>orders · 依赖 T-064</div><div>验收：GET /orders/export 返回 CSV；pytest tests/test_export.py 通过</div></div><div class="row"><span class="pri y">P1</span><span class=caret>▸</span><span class=id>T-070</span><span class=tt>会话表迁移</span><span class="pill y">待决策</span></div><div class="row"><span class="pri m">P2</span><span class=caret>▸</span><span class=id>T-066</span><span class=tt>升级支付 SDK</span><span class="pill r">阻塞</span></div><div class="row"><span class="pri y">P1</span><span class=caret>▸</span><span class=id>T-069</span><span class=tt>审计日志分页</span><span class="pill y">待验证</span></div>
+<h4>待决策 <span class=dim>1 条 · 在会话里说「T-0NN 选 A」答复</span></h4>
+<div class=dec><div><b class=y>T-070</b> 迁移期间保留旧会话吗？</div><div class=dim>A. 双写一周（推荐）；B. 直接切换</div></div>
+<h4>人工阻塞</h4>
+<div class=blk><b class=r>H-003</b> 需要财务提供沙箱 API key <span class=dim>→ T-066</span></div>
+<h4>Agent <span class=dim>1 运行中</span></h4><div class=agent><span class="g">●</span><span class=tt>T-071 · 订单列表加 CSV 导出</span><span class=dim>general-purpose · 运行中 24m</span></div><div class=agent><span class="m">○</span><span class=tt>T-069 · 审计日志分页</span><span class=dim>general-purpose · 已结束 38m</span></div>
+<h4>最近流水 <span class=dim>8 条</span></h4><div class=log><span class=dim>11-15 01:45</span> <span class="a">T-071</span> <span class=tt>DISPATCH nonce=a4</span></div><div class=log><span class=dim>11-15 01:44</span> <span class="a">T-070</span> <span class=tt>NEEDS_DECISION 涉及 schema，两种做法</span></div><div class=log><span class=dim>11-15 01:32</span> <span class="a">T-070</span> <span class=tt>DISPATCH nonce=a3</span></div><div class=log><span class=dim>11-15 01:31</span> <span class="a">T-069</span> <span class=tt>DONE commits 2 · ~38m · 审计日志分页</span></div><div class=log><span class=dim>11-15 00:53</span> <span class="a">T-069</span> <span class=tt>DISPATCH nonce=a2</span></div><div class=log><span class=dim>11-15 00:10</span> <span class="g">START</span> <span class=tt>max=10 hours=8</span></div>
+<div class="foot dim">只读 · 每 5s 刷新 · 数据来自 .claude/backlog.md 与 .claude/auto/</div>
+</div></div><div class=tag>示意图 · 演示用任务池 · 按真实右侧面板的布局绘制</div></section>
+<section id="dash-dock-zh" class="card wide"><div class=win><div class=bar><i></i><i></i><i></i><span>claude — my-app</span></div><div class=split><div class=chat><div class="msg you"><span>›</span><p>/task:loop</p></div><div class="msg ai"><span>⏺</span><p>循环已启动：最多 10 个任务、8 小时。T-065 已派给全新 worker。</p></div><div class="msg ai"><span>⏺</span><p>T-069 交付：我亲自重跑测试，214 项通过 → 待验证。</p></div><div class="msg ai"><span>⏺</span><p>T-070 涉及 schema、有两种做法，已挂入待决策，先做下一个。</p></div><div class="msg you"><span>›</span><p>加个任务：Safari 下登录页闪烁</p></div><div class="msg ai"><span>⏺</span><p>已录入 T-072（P2），当前任务 T-071 不受影响。</p></div><div class=spacer></div><div class=prompt>› T-070 选 A<b class=cursor></b></div><div class=sl>任务流水线 ● 运行中 · T-071 订单列表加 CSV 导出 · 24m · 待验证 1 · 待决策 1 · 阻塞 1 · /task-dash</div></div><div class=pane>
+<div class=head><div><b>任务流水线</b> <span class=dim>[my-app]</span> <span class=g>● 运行中</span></div><span class=btn>⟳ 刷新</span></div>
+<div class="dim small">~/code/my-app · 已交付 2/10 · 已运行 1h 59m/8h</div>
+<h4>当前任务</h4>
+<div class=curcard><div><b class=a>T-071</b> <b>订单列表加 CSV 导出</b></div><div class="dim small">阶段 running · worker-T-071 · 已运行 24m · 基线 9f3c2a1b</div></div>
+<div class=stats><span class=stat><i>完成率</i> <b class=g>25%</b></span><span class=stat><i>交付率</i> <b class=a>38%</b></span><span class=stat><i>一次通过</i> <b class=g>100%</b></span><span class=stat><i>7日交付</i> <b class=g>2</b></span><span class=stat><i>中位周期</i> <b class=>38m</b></span><span class=stat><i>WIP</i> <b class=g>1</b></span><span class=stat><i>待验证</i> <b class=y>1</b></span><span class=stat><i>已归档</i> <b class=>2</b></span></div>
+<h4>任务 <span class=dim>6</span></h4>
+<div class=chips><span class="chip on">活跃 4</span><span class="chip">待开始 2</span><span class="chip">待验证 1</span><span class="chip">待决策 1</span><span class="chip">阻塞 1</span><span class="chip">全部 6</span></div><div class="row cur"><span class="pri y">P1</span><span class=caret>▾</span><span class=id>T-071</span><span class=tt>订单列表加 CSV 导出</span><span class="pill a">进行中</span></div><div class=detail><div>orders · 依赖 T-064</div><div>验收：GET /orders/export 返回 CSV；pytest tests/test_export.py 通过</div></div><div class="row"><span class="pri y">P1</span><span class=caret>▸</span><span class=id>T-070</span><span class=tt>会话表迁移</span><span class="pill y">待决策</span></div><div class="row"><span class="pri m">P2</span><span class=caret>▸</span><span class=id>T-066</span><span class=tt>升级支付 SDK</span><span class="pill r">阻塞</span></div><div class="row"><span class="pri y">P1</span><span class=caret>▸</span><span class=id>T-069</span><span class=tt>审计日志分页</span><span class="pill y">待验证</span></div>
+<h4>待决策 <span class=dim>1 条 · 在会话里说「T-0NN 选 A」答复</span></h4>
+<div class=dec><div><b class=y>T-070</b> 迁移期间保留旧会话吗？</div><div class=dim>A. 双写一周（推荐）；B. 直接切换</div></div>
+<h4>人工阻塞</h4>
+<div class=blk><b class=r>H-003</b> 需要财务提供沙箱 API key <span class=dim>→ T-066</span></div>
+<h4>Agent <span class=dim>1 运行中</span></h4><div class=agent><span class="g">●</span><span class=tt>T-071 · 订单列表加 CSV 导出</span><span class=dim>general-purpose · 运行中 24m</span></div><div class=agent><span class="m">○</span><span class=tt>T-069 · 审计日志分页</span><span class=dim>general-purpose · 已结束 38m</span></div>
+<h4>最近流水 <span class=dim>8 条</span></h4><div class=log><span class=dim>11-15 01:45</span> <span class="a">T-071</span> <span class=tt>DISPATCH nonce=a4</span></div><div class=log><span class=dim>11-15 01:44</span> <span class="a">T-070</span> <span class=tt>NEEDS_DECISION 涉及 schema，两种做法</span></div><div class=log><span class=dim>11-15 01:32</span> <span class="a">T-070</span> <span class=tt>DISPATCH nonce=a3</span></div><div class=log><span class=dim>11-15 01:31</span> <span class="a">T-069</span> <span class=tt>DONE commits 2 · ~38m · 审计日志分页</span></div><div class=log><span class=dim>11-15 00:53</span> <span class="a">T-069</span> <span class=tt>DISPATCH nonce=a2</span></div><div class=log><span class=dim>11-15 00:10</span> <span class="g">START</span> <span class=tt>max=10 hours=8</span></div>
+<div class="foot dim">只读 · 每 5s 刷新 · 数据来自 .claude/backlog.md 与 .claude/auto/</div>
+</div></div></div><div class=tag>示意图 · 演示用任务池 · 按真实右侧面板的布局绘制</div></section>
