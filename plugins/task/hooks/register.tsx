@@ -433,14 +433,40 @@ function Heading({ els, title, extra }: { els: Els; title: string; extra?: strin
   )
 }
 
-/** Below this a row of four tiles gets too narrow to read; the tiles go two to a row. */
-const TILES_4_MIN_COLUMNS = 48
+/** Cells a text takes in the terminal: CJK and fullwidth characters take two. */
+function cellWidth(text: string): number {
+  let n = 0
+  for (const ch of text) n += /[\u1100-\u115f\u2e80-\ua4cf\uac00-\ud7a3\uf900-\ufaff\ufe30-\ufe4f\uff00-\uff60\uffe0-\uffe6]/.test(ch) ? 2 : 1
+  return n
+}
 
-/** One metric as a framed tile: label above, value below. */
-function Stat({ els, label, value, color, width }: { els: Els; label: string; value: string; color?: string; width: number }) {
+/** A tile's border and left padding take three of its cells. */
+const TILE_CHROME = 3
+
+/**
+ * Metrics as tiles, four to a row, only while each tile holds its longest label
+ * whole; otherwise as plain `label value` text, which keeps a narrow pane short.
+ */
+function tileWidth(cols: number, labels: string[]): number | null {
+  const tile = Math.floor(cols / 4)
+  return tile - TILE_CHROME >= Math.max(...labels.map(cellWidth)) ? tile : null
+}
+
+/** One metric: a framed tile (label above, value below) when given a width, else a text pair. */
+function Stat({ els, label, value, color, width }: { els: Els; label: string; value: string; color?: string; width: number | null }) {
   const { Box, Text } = els
+  if (width === null) {
+    return (
+      <Box marginRight={2}>
+        <Text dimColor>{label} </Text>
+        <Text bold color={color}>
+          {value}
+        </Text>
+      </Box>
+    )
+  }
   return (
-    <Box flexDirection="column" width={width} borderStyle="round" borderColor="subtle" paddingX={1}>
+    <Box flexDirection="column" width={width} borderStyle="round" borderColor="subtle" paddingLeft={1}>
       <Text dimColor wrap="truncate-end">
         {label}
       </Text>
@@ -459,7 +485,7 @@ function StatusTag({ els, status, label }: { els: Els; status: string; label: st
     <Text>
       {' '}
       {color ? (
-        <Text backgroundColor={color} color="inverseText" bold>
+        <Text backgroundColor={color} color="black" bold>
           {` ${label} `}
         </Text>
       ) : (
@@ -474,7 +500,7 @@ function CurrentCard({ els, snap, now }: { els: Els; snap: Snapshot; now: number
   const cur = snap.current
   if (!cur) {
     return (
-      <Box flexDirection="column">
+      <Box flexDirection="column" borderStyle="round" borderColor="subtle" paddingX={1}>
         <Text dimColor>{L.noCurrent}</Text>
         {snap.inbox ? <Text dimColor>{L.inboxPending(snap.inbox)}</Text> : null}
       </Box>
@@ -614,8 +640,7 @@ async function drawPane($: EngineInterface, els: Els, cols: number) {
   const now = Math.max(snap.readAt, await read($, nowAtom))
   const [agentList, filterKey, opened] = await Promise.all([read($, agents), read($, filter), read($, openTask)])
   const active = FILTERS.find(f => f.key === filterKey) ?? FILTERS[0]!
-  const perRow = cols >= TILES_4_MIN_COLUMNS ? 4 : 2
-  const tile = Math.floor(cols / perRow)
+  const tile = tileWidth(cols, Object.values(L.stats))
   const shown = snap.tasks.filter(active.match)
   const sessionText = s
     ? [
@@ -683,10 +708,11 @@ async function drawPane($: EngineInterface, els: Els, cols: number) {
                 </Text>{' '}
                 {d.question}
               </Text>
-              <Text dimColor wrap="wrap">
-                {'    '}
-                {d.options}
-              </Text>
+              <Box paddingLeft={4}>
+                <Text dimColor wrap="wrap">
+                  {d.options}
+                </Text>
+              </Box>
             </Box>
           ))}
         </Box>

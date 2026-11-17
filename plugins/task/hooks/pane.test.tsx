@@ -319,7 +319,7 @@ test('a hidden status line stays hidden on a failed read, and the timer starts o
   expect(timers).toBe(1)
 })
 
-test('the pane frames the current task and metrics as tiles and tags statuses in colour', async ($, on) => {
+test('the pane frames the current task and shows metrics as tiles only where labels fit', async ($, on) => {
   on('session.cwd', () => ({ value: '/proj' }))
   on('clock.now', () => ({ value: new Date(2026, 10, 15, 12, 0, 0).getTime() }))
   on('fs.exists', (_$, e) => ({ value: e.path in FILES }))
@@ -331,18 +331,25 @@ test('the pane frames the current task and metrics as tiles and tags statuses in
   on('env.get', (_$, e) => ({ value: e.name === 'LANG' ? 'zh_CN.UTF-8' : undefined }))
   on('agent.list', () => ({ value: [] }))
   await $.command.run(RUN)
-  for (const [cols, perRow] of [[80, 4], [40, 2]] as const) {
+  // 中位周期 / 一次通过 take 8 cells; a tile adds 3 of chrome, so four tiles need 44 columns.
+  for (const [cols, tiled] of [[80, true], [44, true], [43, false], [20, false]] as const) {
     const ui = await $.ui.mount({ plugin: 'task', surface: 'terminal', component: 'Pane', requestId: 'task-dash', props: { ...PANE_PROPS, bodyColumns: cols } })
     const boxes = await ui.findAll({ type: 'Box' })
-    // The current task sits in an accent-framed card.
+    // The current task sits in an accent-framed card at any width.
     expect(boxes.some(b => b.props.borderStyle === 'round' && b.props.borderColor === 'claude')).toBe(true)
-    // Eight metric tiles, four to a row on a normal pane, two on a narrow one.
     const tiles = boxes.filter(b => b.props.borderStyle === 'round' && b.props.borderColor === 'subtle')
-    expect(tiles).toHaveLength(8)
-    expect(tiles.every(t => t.props.width === Math.floor(cols / perRow))).toBe(true)
-    // The running task's status is a filled tag, not bare coloured text.
+    expect(tiles).toHaveLength(tiled ? 8 : 0)
+    // Every label is drawn whole either way.
+    for (const label of ['完成率', '一次通过', '中位周期', '已归档']) expect(await ui.find({ type: 'Text', text: label })).toBeDefined()
+    // The running task's status is a filled tag with dark text; a status with no colour is a plain tag.
     const tags = await ui.findAll({ type: 'Text', text: /进行中/ })
-    expect(tags.some(t => t.props.backgroundColor === 'claude' && t.props.color === 'inverseText')).toBe(true)
+    expect(tags.some(t => t.props.backgroundColor === 'claude' && t.props.color === 'black')).toBe(true)
     await ui.unmount()
   }
+  await $.command.run({ ...RUN, args: '' })
+  const ui = await $.ui.mount({ plugin: 'task', surface: 'terminal', component: 'Pane', requestId: 'task-dash', props: PANE_PROPS })
+  await ui.press({ key: 'filter:all' })
+  const todo = await ui.findAll({ type: 'Text', text: / 待开始 / })
+  expect(todo.some(t => t.props.color === 'subtle' && t.props.backgroundColor === undefined)).toBe(true)
+  await ui.unmount()
 })
