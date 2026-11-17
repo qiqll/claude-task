@@ -48,16 +48,31 @@ docs/promo/publish.sh         # 推送 main+tag、设置 About/topics、开启 P
 
 新开会话，确认 `/task:init` 可用、`/plugin` 里显示版本 0.3.1。再用 README 里的两步写法（`/plugin marketplace add` + `/plugin install task@claude-task`）装一次，确认备用方案也能用。
 
-## 6. 发布渠道
+## 6. 插件目录与发布渠道
 
-帖子草稿见 [posts.md](posts.md)。建议节奏：
+> 来源：2026-11-17 调研。所有链接调研时都没能直接打开，只核对了搜索摘要；动手前请先点进去确认当前规则。
 
-| 时间 | 渠道 |
-|---|---|
-| 第 1 天 | V2EX 分享创造、即刻、朋友圈 |
-| 第 2 天 | X thread（@ Claude Code 官方账号）、r/ClaudeCode |
-| 第 3–4 天 | 掘金长文、小红书图文、r/ClaudeAI |
-| 有了第一批反馈后 | Show HN（工作日美东上午发），给 awesome-claude-code 这类列表提 PR |
+### 让用户自己发现（被动长尾，先做）
+
+| 渠道 | 怎么做 | 备注 |
+|---|---|---|
+| **Anthropic 官方插件目录** | 用付费 Claude 账号登录 claude.ai/directory/manage 提交；文档 https://claude.com/docs/directory/publish 。`anthropics/claude-plugins-official` 仓库已不接受 PR | 审核周期、是否进 `/plugin` → Discover 未确认。上架后用户无需加 marketplace |
+| **claudemarketplaces.com、claude-plugins.dev** | 不用操作：自动抓取含 `.claude-plugin/marketplace.json` 的公开仓库 | 过几天去站内搜 `claude-task` 确认 |
+| **awesome-claude-code** | Issues 页 "Recommend a new resource" 表单（不接受 PR，手写 issue 会被自动关闭） | 可能要求项目满 14 天或 100 star（未核实）。文字见 posts.md |
+| **aitmpl / claude-code-templates** | 给 davila7/claude-code-templates 提 PR，先看它的 CONTRIBUTING | 可选 |
+
+### 主动推广（集中在一周内发，借助彼此的热度冲 GitHub Trending）
+
+| 顺序 | 渠道 | 文案 |
+|---|---|---|
+| 第 1 天 | V2EX（分享创造 + Claude Code 节点）、即刻、朋友圈 | posts.md |
+| 第 1 天 | 投 HelloGitHub、阮一峰周刊（编辑周期长，尽早投） | posts.md 末尾 |
+| 第 2 天 | X thread（@ Claude Code 官方账号）、r/ClaudeCode | posts.md |
+| 第 3 天 | 掘金长文、小红书图文、r/ClaudeAI（先看版规） | posts.md |
+| 第 4–5 天 | Show HN（美东工作日上午），首条评论自己写 | posts.md |
+| 可选 | Product Hunt / DevHunt、Console.dev（免费提交）、Anthropic Discord（从 claude.com/community 拿官方邀请）、开源中国 / Gitee 同步 | — |
+
+几点：同一个项目不要在同一渠道反复发；及时回复评论；有了真实运行结果（截图 + 数字）后可以发第二轮。
 
 ## 7. 之后每次发版
 
