@@ -1,5 +1,6 @@
 import { expect, test } from 'claude-code/testing'
 
+import { cellWidth } from './data'
 import { BACKLOG, CURRENT, PROGRESS, RUN_LOG } from './fixtures'
 
 const FILES: Record<string, string> = {
@@ -544,25 +545,29 @@ test('an open row is a card of aligned fields: whole title, module/deps/origin, 
     const card = await ui.find({ key: 'detail:T-107' })
     expect(card).toBeDefined()
     const boxes = await ui.findAll({ type: 'Box' })
-    expect(boxes.some(b => b.props.borderStyle === 'round' && b.props.borderColor === 'subtle' && b.props.paddingX === 1 && String(b.text).includes(long))).toBe(true)
-    // The whole title, wrapped rather than cut as on the row.
+    expect(boxes.some(b => b.props.borderStyle === 'round' && b.props.borderColor === 'subtle' && b.props.paddingX === 1 && String(b.text).replace(/\n/g, '').includes(long))).toBe(true)
+    // The whole title, wrapped rather than cut as on the row: every line fits the card and none is left half empty.
     const title = await ui.find({ key: 'detail-title:T-107' })
-    expect(title?.text).toBe(long)
-    const titleText = await ui.findAll({ type: 'Text', text: long })
+    expect(title?.text.replace(/\n/g, '')).toBe(long)
+    const titleText = (await ui.findAll({ type: 'Text' })).filter(t => t.text.replace(/\n/g, '') === long)
     expect(titleText.some(t => t.props.wrap === 'wrap' && t.props.bold === true)).toBe(true)
+    const titleLines = title!.text.split('\n')
+    expect(titleLines.length).toBe(Math.ceil(cellWidth(long) / (cols - 6)))
+    for (const line of titleLines) expect(cellWidth(line)).toBeLessThanOrEqual(cols - 6)
     // Fields in order, each label beside (or, too narrow, above) its value.
     const names = ['module', 'deps', 'derivedFrom', 'acceptance', 'note']
     const fields = await Promise.all(names.map(n => ui.find({ key: `field:T-107:${n}` })))
     expect(fields.every(Boolean)).toBe(true)
-    expect(fields[0]?.text).toContain('模块')
-    expect(fields[0]?.text).toContain('测试')
-    expect(fields[1]?.text).toContain('T-071')
-    expect(fields[2]?.text).toContain('T-104')
-    expect(fields[3]?.text).toContain('用例不依赖当天')
+    expect(fields[0]?.text.replace(/\n/g, '')).toContain('模块')
+    expect(fields[0]?.text.replace(/\n/g, '')).toContain('测试')
+    expect(fields[1]?.text.replace(/\n/g, '')).toContain('T-071')
+    expect(fields[2]?.text.replace(/\n/g, '')).toContain('T-104')
+    expect(fields[3]?.text.replace(/\n/g, '')).toContain('用例不依赖当天')
     for (const f of fields) expect(f?.props.flexDirection).toBe(stacked ? 'column' : 'row')
     // The note's acceptance clause is not repeated; what is left is one clause a line.
-    expect(fields[4]?.text).toContain('来源：衍生自 T-104（第 1 层）')
-    expect(fields[4]?.text).not.toContain('验收')
+    // A break at a space drops the space, so compare without whitespace.
+    expect(fields[4]?.text.replace(/\s/g, '')).toContain('来源：衍生自T-104（第1层）')
+    expect(fields[4]?.text.replace(/\n/g, '')).not.toContain('验收')
     await ui.press({ key: 'task:T-107' })
     expect(await ui.find({ key: 'detail:T-107' })).toBeUndefined()
     await ui.unmount()
@@ -640,7 +645,7 @@ test('a second 验收 in the note stays in the note, and labels keep one column 
   const note = (await ui.find({ key: 'field:T-111:note' }))?.text ?? ''
   // The delivery's own 验收 is what the requester checks: it is not dropped with the first one.
   expect(note).toContain('验收：31 项全绿')
-  expect(note).toContain('自动交付（2026-11-17）：commits abc')
+  expect(note.replace(/\n/g, '')).toContain('自动交付（2026-11-17）：commits abc')
   expect(note).not.toContain('pytest x')
   const plain = await labelWidths(ui, 'T-111')
   expect(plain).toBeGreaterThan(0)

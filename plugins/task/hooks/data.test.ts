@@ -2,6 +2,7 @@ import { describe, expect, test } from 'claude-code/testing'
 
 import {
   buildSnapshot,
+  cellWidth,
   loopStatusOf,
   parseBacklog,
   parseCurrent,
@@ -13,6 +14,7 @@ import {
   normalizeStatus,
   splitRow,
   transitions,
+  wrapCells,
 } from './data'
 import { BACKLOG, CURRENT, PROGRESS, RUN_LOG } from './fixtures'
 
@@ -140,5 +142,29 @@ describe('snapshot', () => {
     const d1 = buildSnapshot('/proj', { ...files, backlog: dup }, NOW)
     const d2 = buildSnapshot('/proj', { ...files, backlog: dup.replace('| 想法 |', '| 想法2 |') }, NOW)
     expect(transitions(d1, d2)).toEqual([])
+  })
+})
+
+describe('wrapping', () => {
+  test('a Chinese run after a space fills the line it starts on instead of moving down whole', () => {
+    // The case from the panel: a space-only wrap would put everything after "~46" on the next line.
+    const text = '窄面板（如截图 ~46 列）下状态标签单行完整显示且不换行，任务行保持一行高'
+    const lines = wrapCells(text, 30)
+    for (const line of lines) expect(cellWidth(line)).toBeLessThanOrEqual(30)
+    // Every line but the last is full, short only by a unit that would not fit (at most one CJK cell pair or a word).
+    for (const line of lines.slice(0, -1)) expect(cellWidth(line)).toBeGreaterThanOrEqual(26)
+    expect(lines.join(' ').replace(/\s/g, '')).toBe(text.replace(/\s/g, ''))
+  })
+
+  test('latin words stay whole, punctuation keeps its side, and a word wider than a line is cut', () => {
+    expect(wrapCells('pytest tests/test_pool.py 全绿', 12)).toEqual(['pytest tests', '/test_pool.p', 'y 全绿'])
+    expect(wrapCells('Acceptance criteria are met', 12)).toEqual(['Acceptance', 'criteria are', 'met'])
+    // 。 never starts a line; （ never ends one.
+    for (const line of wrapCells('一二三四五。六七八九（十）', 10)) {
+      expect(line.startsWith('。')).toBe(false)
+      expect(line.endsWith('（')).toBe(false)
+    }
+    expect(wrapCells('短', 10)).toEqual(['短'])
+    expect(wrapCells('', 10)).toEqual([''])
   })
 })

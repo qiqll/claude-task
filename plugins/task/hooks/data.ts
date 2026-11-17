@@ -430,3 +430,81 @@ export function percent(rate: number | null): string {
 export function taskIdIn(text: string): string | null {
   return /\bT-\d{3,}\b/.exec(text)?.[0] ?? null
 }
+
+const WIDE = /[\u1100-\u115f\u2e80-\ua4cf\uac00-\ud7a3\uf900-\ufaff\ufe30-\ufe4f\uff00-\uff60\uffe0-\uffe6]/
+/** Punctuation that never starts a line (it stays with the character before it). */
+const NO_LINE_START = /^[，。、；：！？）」』》〉】,.;:!?)\]}%]/
+/** Punctuation that never ends a line (it goes down with the character after it). */
+const NO_LINE_END = /[（「『《〈【([{]$/
+
+/** Cells a text takes in the terminal: CJK and fullwidth characters take two. */
+export function cellWidth(text: string): number {
+  let n = 0
+  for (const ch of text) n += WIDE.test(ch) ? 2 : 1
+  return n
+}
+
+/**
+ * Lines of at most `width` cells. Breaks between any two CJK characters as well
+ * as at spaces, so a long Chinese run after a space fills the line it starts on
+ * instead of moving down whole (what a space-only wrap does). Latin words and
+ * numbers stay whole unless wider than a line; closing punctuation stays on the
+ * line before, opening punctuation goes down with what it opens.
+ */
+export function wrapCells(text: string, width: number): string[] {
+  if (width < 2) return [text]
+  // Units that never split: one CJK character, one space, or a run of anything else.
+  const units: string[] = []
+  for (const ch of text) {
+    const last = units.at(-1)
+    if (ch !== ' ' && !WIDE.test(ch) && last !== undefined && last !== ' ' && !WIDE.test(last.at(-1)!)) units[units.length - 1] = last + ch
+    else units.push(ch)
+  }
+  // Glue punctuation to its neighbour so no line starts with 。 or ends with （.
+  const glued: string[] = []
+  for (const u of units) {
+    const last = glued.at(-1)
+    if (last !== undefined && last !== ' ' && u !== ' ' && (NO_LINE_START.test(u) || NO_LINE_END.test(last))) glued[glued.length - 1] = last + u
+    else glued.push(u)
+  }
+  const lines: string[] = []
+  let line = ''
+  let used = 0
+  const flush = () => {
+    lines.push(line.trimEnd())
+    line = ''
+    used = 0
+  }
+  for (const u of glued) {
+    const w = cellWidth(u)
+    if (u === ' ') {
+      if (!line) continue
+      if (used + 1 > width) flush()
+      else {
+        line += u
+        used += 1
+      }
+      continue
+    }
+    if (used + w <= width) {
+      line += u
+      used += w
+      continue
+    }
+    if (w <= width) {
+      if (line.trim()) flush()
+      line = u
+      used = w
+      continue
+    }
+    // Wider than a whole line (a long path or URL): cut it where the line ends.
+    for (const ch of u) {
+      const cw = cellWidth(ch)
+      if (used + cw > width && line.trim()) flush()
+      line += ch
+      used += cw
+    }
+  }
+  if (line.trim() || !lines.length) flush()
+  return lines
+}

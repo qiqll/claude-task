@@ -2,7 +2,7 @@ import { atom, read, update } from 'claude-code'
 import type { EngineInterface, PluginOptions, Register } from 'claude-code'
 
 import type { AgentRow, PoolFiles, Snapshot, Task } from '../types'
-import { buildSnapshot, clauseAcceptance, duration, noteClauses, percent, taskIdIn, transitions } from './data'
+import { buildSnapshot, cellWidth, clauseAcceptance, duration, noteClauses, percent, taskIdIn, transitions, wrapCells } from './data'
 import { firstAppleLanguage, pickLang, STRINGS, statusLabel } from './i18n'
 import type { Lang, Strings } from './i18n'
 
@@ -462,13 +462,6 @@ function Heading({ els, title, extra }: { els: Els; title: string; extra?: strin
   )
 }
 
-/** Cells a text takes in the terminal: CJK and fullwidth characters take two. */
-function cellWidth(text: string): number {
-  let n = 0
-  for (const ch of text) n += /[\u1100-\u115f\u2e80-\ua4cf\uac00-\ud7a3\uf900-\ufaff\ufe30-\ufe4f\uff00-\uff60\uffe0-\uffe6]/.test(ch) ? 2 : 1
-  return n
-}
-
 /** A tile's border and left padding take three of its cells. */
 const TILE_CHROME = 3
 
@@ -588,11 +581,16 @@ function noteLines(task: Task): string[] {
   return shown < 0 ? clauses : clauses.filter((_, i) => i !== shown)
 }
 
+/** Bullet before each clause of a field of several. */
+const BULLET_CELLS = 2
+
 /**
  * One labelled field of an expanded row. Labels sit in a column of one width,
  * so every value starts at the same cell and wraps under itself, not under the label.
+ * Values come pre-wrapped to `valueCells` (see wrapCells): the host wraps at spaces only,
+ * which would move a whole Chinese run down a line and leave the line before half empty.
  */
-function Field({ els, fieldKey, label, labelCells, stacked, lines, dim }: { els: Els; fieldKey: string; label: string; labelCells: number; stacked: boolean; lines: string[]; dim?: boolean }) {
+function Field({ els, fieldKey, label, labelCells, valueCells, stacked, lines, dim }: { els: Els; fieldKey: string; label: string; labelCells: number; valueCells: number; stacked: boolean; lines: string[]; dim?: boolean }) {
   const { Box, Text } = els
   const values = (
     <Box flexDirection="column" flexGrow={1} flexShrink={1} minWidth={0} paddingLeft={stacked ? 2 : 0}>
@@ -604,14 +602,14 @@ function Field({ els, fieldKey, label, labelCells, stacked, lines, dim }: { els:
             </Box>
             <Box flexGrow={1} flexShrink={1} minWidth={0}>
               <Text wrap="wrap" dimColor={dim}>
-                {line}
+                {wrapCells(line, valueCells - BULLET_CELLS).join('\n')}
               </Text>
             </Box>
           </Box>
         ) : (
           <Box key={`${fieldKey}:${i}`}>
             <Text wrap="wrap" dimColor={dim}>
-              {line}
+              {wrapCells(line, valueCells).join('\n')}
             </Text>
           </Box>
         ),
@@ -644,16 +642,18 @@ function TaskDetail({ els, task, isCurrent, cols }: { els: Els; task: Task; isCu
   // Sized for every label, not just this card's, so values start at one column in every open row.
   const labelCells = Math.max(...Object.values(F).map(cellWidth)) + 2
   const stacked = cols - DETAIL_CHROME - labelCells < MIN_VALUE_CELLS
+  // A stacked value sits under its label, indented by two.
+  const valueCells = stacked ? cols - DETAIL_CHROME - 2 : cols - DETAIL_CHROME - labelCells
   return (
     <Box key={`detail:${task.id}`} paddingLeft={DETAIL_INDENT}>
       <Box flexDirection="column" flexGrow={1} minWidth={0} borderStyle="round" borderColor={isCurrent ? 'claude' : 'subtle'} paddingX={1}>
         <Box key={`detail-title:${task.id}`}>
           <Text bold wrap="wrap">
-            {task.title}
+            {wrapCells(task.title, cols - DETAIL_CHROME).join('\n')}
           </Text>
         </Box>
         {fields.map(f => (
-          <Field key={`field:${task.id}:${f.name}`} els={els} fieldKey={`field:${task.id}:${f.name}`} label={f.label} labelCells={labelCells} stacked={stacked} lines={f.lines} dim={f.dim} />
+          <Field key={`field:${task.id}:${f.name}`} els={els} fieldKey={`field:${task.id}:${f.name}`} label={f.label} labelCells={labelCells} valueCells={valueCells} stacked={stacked} lines={f.lines} dim={f.dim} />
         ))}
       </Box>
     </Box>
