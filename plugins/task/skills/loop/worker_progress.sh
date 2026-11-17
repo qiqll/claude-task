@@ -7,8 +7,41 @@
 #   输出一行：OK|IDLE|SPIN out=<分钟>m tree=<分钟>m
 #     IDLE：out ≥ idle_min      SPIN：out 正常但 tree ≥ spin_min
 #   退出码：0=OK  1=IDLE/SPIN（调度员需进一步判断）  2=用法/字段错误
-# 兼容 macOS bash 3.2 + BSD 工具。
+#
+#   worker_progress.sh --recent <output 文件> [n=15]
+#     摘出 transcript 最近 n 条动作（工具名 + 参数/结果开头），供调度员判断是否原地打转；每条一行、截断到 200 字。
+# 兼容 macOS bash 3.2 + BSD 工具，也兼容 GNU。
 set -uo pipefail
+
+if [[ "${1:-}" == "--recent" ]]; then
+  out="${2:-}"; n="${3:-15}"
+  [[ -n "$out" && -e "$out" ]] || { echo "用法: $0 --recent <output 文件> [n]" >&2; exit 2; }
+  # transcript 是 JSONL，单行常超过几 KB：只取尾部 256KB，丢掉第一条半截行，逐行解析
+  if command -p python3 -c '' 2>/dev/null; then
+    tail -c 262144 "$out" | command -p python3 -I -c '
+import json, sys
+n = int(sys.argv[1]); lines = sys.stdin.read().split("\n")[1:]; acts = []
+def clip(v): return " ".join(str(v).split())[:200]
+for ln in lines:
+    try: e = json.loads(ln)
+    except Exception: continue
+    c = (e.get("message") or {}).get("content")
+    if isinstance(c, str): acts.append("SAY " + clip(c)); continue
+    for b in c or []:
+        if not isinstance(b, dict): continue
+        t = b.get("type")
+        if t == "tool_use": acts.append("TOOL " + str(b.get("name")) + " " + clip(json.dumps(b.get("input"), ensure_ascii=False)))
+        elif t == "tool_result":
+            r = b.get("content"); r = " ".join(x.get("text", "") for x in r if isinstance(x, dict)) if isinstance(r, list) else r
+            acts.append(("ERR " if b.get("is_error") else "RESULT ") + clip(r))
+        elif t == "text": acts.append("SAY " + clip(b.get("text")))
+print("\n".join(acts[-n:]) or "（无可解析的动作）")
+' "$n"
+  else
+    tail -n "$n" "$out" | cut -c1-200
+  fi
+  exit 0
+fi
 
 cur="${1:-}"; idle_min="${2:-30}"; spin_min="${3:-60}"
 [[ -n "$cur" && -f "$cur" ]] || { echo "用法: $0 <current 文件> [idle_min] [spin_min]" >&2; exit 2; }
@@ -17,7 +50,9 @@ start_sha="$(field start_sha)"; started="$(field started)"; output="$(field outp
 [[ "$started" =~ ^[0-9]+$ ]] || { echo "current 缺少 started" >&2; exit 2; }
 git rev-parse --verify -q "${start_sha:-x}^{commit}" >/dev/null || { echo "current 的 start_sha 无效: $start_sha" >&2; exit 2; }
 
-mtime() { stat -f %m "$1" 2>/dev/null || stat -c %Y "$1" 2>/dev/null; }
+# -L：output 是指向 transcript 的符号链接，要的是目标文件的时间。先试 GNU 的 -c（BSD 不认，只报错到 stderr）；
+# 反过来不行 —— GNU 会把 -f 当「查文件系统」往 stdout 打一堆信息
+mtime() { stat -L -c %Y "$1" 2>/dev/null || stat -L -f %m "$1" 2>/dev/null; }
 now="$(date +%s)"
 
 out_at="$started"
@@ -27,16 +62,17 @@ tree_at="$started"
 bump() { [[ "$1" =~ ^[0-9]+$ ]] && (( $1 > tree_at )) && tree_at="$1"; return 0; }
 [[ "$(git rev-parse HEAD)" != "$(git rev-parse "$start_sha")" ]] && bump "$(git log -1 --format=%ct HEAD)"
 # porcelain -z：每条 "XY path\0"，重命名/复制后面多一条原路径 "\0"
+# --no-optional-locks：不刷新 index、不抢 index.lock，避免和 worker 同时 commit 撞锁
 skip_next=0
 while IFS= read -r -d '' entry; do
   if (( skip_next )); then skip_next=0; continue; fi
   st="${entry:0:2}"; path="${entry:3}"
-  [[ "$st" == R* || "$st" == C* ]] && skip_next=1
+  [[ "$st" == *R* || "$st" == *C* ]] && skip_next=1
   case "$path" in .claude/auto/*|.claude/inbox/*) continue ;; esac
   case ",$dirty," in *",$path,"*) continue ;; esac
   [[ "$PWD/$path" == "$output" ]] && continue
-  [[ -e "$path" ]] && bump "$(mtime "$path")"
-done < <(git status --porcelain -z -uall)
+  [[ -e "$path" ]] && bump "$(mtime "$path")"  # 删除没有 mtime，不计；提交后由 HEAD 时间体现
+done < <(git --no-optional-locks status --porcelain -z -uall)
 
 out_m=$(( (now - out_at) / 60 )); tree_m=$(( (now - tree_at) / 60 ))
 if (( out_m >= idle_min )); then v=IDLE

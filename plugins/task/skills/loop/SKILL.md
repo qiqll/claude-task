@@ -101,7 +101,7 @@ argument-hint: "[max=N 最多任务数，默认 10] [hours=N 最长时长，默�
 | `NEEDS_DECISION` | 结论 `待决策`，`DECISION` 原文写进待决策表 |
 | `BLOCKED` | 结论 `阻塞`，依赖列写原因；需人工操作的在「人工阻塞事项」开 `H-NNN` |
 | `BASELINE_RED` | 结论 `阻塞`（基线红：用例名）；把「修复基线 <用例>」作为衍生任务录入，优先级同本任务（计 1 层衍生）。noprog+1 |
-| `FAILED` / 超时 / 停滞 / 无报告 | **先分辨是不是基础设施中断**：worker 以 API 错误 / 连接重置 / 限流等 `failureReason` 停下且没交报告 → 不算任务失败：核对 `<start>..HEAD` 与遗留文件后，用 SendMessage 让同一个 worker 从断点续做（同一 nonce），每个任务最多续 2 次，`phase` 保持 `running`；第 3 次仍中断才按 FAILED 处理。其余情况见下方「回滚」。备注追加「自动失败×N：原因」；N≥2 → `阻塞`，否则回 `待开始`（下次派发带上失败原因）。noprog+1 |
+| `FAILED` / 超时 / 停滞 / 无报告 | **先分辨是不是基础设施中断**：worker 以 API 错误 / 连接重置 / 限流等 `failureReason` 停下且没交报告 → 不算任务失败：核对 `<start>..HEAD` 与遗留文件后，删掉 current 的 `nudged` / `watch_ok` 行，用 SendMessage 让同一个 worker 从断点续做（同一 nonce），每个任务最多续 2 次，`phase` 保持 `running`；第 3 次仍中断才按 FAILED 处理。其余情况见下方「回滚」。备注追加「自动失败×N：原因」；N≥2 → `阻塞`，否则回 `待开始`（下次派发带上失败原因）。noprog+1 |
 | `GATE_PENDING_REVIEW` | worker 派不了子 agent：写 `phase=review_pending`，你派 `code-reviewer`（没有该 agent 时用 `general-purpose` 子 agent 做只读审查）审 `<start>..HEAD`，把发现用 SendMessage 发给 `worker-T-0NN`，让它按 /task:auto Step 4 第 2 步继续并重新返回报告（同一 nonce）。结束回合等通知 |
 
 **回滚**（只在 FAILED 类结论时）：
@@ -151,11 +151,11 @@ argument-hint: "[max=N 最多任务数，默认 10] [hours=N 最长时长，默�
 | `OK …` | output 在增长、工作区在变 | 静默 |
 | `IDLE …` | output ≥ 30 分钟没写入：卡在某一步或已挂 | 见下 |
 | `SPIN …` | output 在写，但工作区 ≥ 60 分钟没变（无新提交、无文件改动）：可能原地打转 | 见下 |
-| 退出码 2 | current 字段坏了 | 静默；run.log 记一条 WATCHDOG 行写明检测失败原因，等 3 小时超时兜底 |
+| 退出码 2 | current 字段坏了 | 静默；run.log 记一条 WATCHDOG 行写明检测失败原因（同一任务同一原因只记一次），等 3 小时超时兜底 |
 
 `IDLE` / `SPIN` 时：
 1. current 有 `watch_ok`，且距今 < 60 分钟 → 静默（上次已判定为正常的长步骤）。
-2. 没有 `nudged` → 看 `tail -c 6000 <output>`（只看这一段），判断：
+2. 没有 `nudged` → 跑 `bash $SK/worker_progress.sh --recent <output>`（摘出最近 15 条动作，**不要直接 tail / Read output**，那是整份 JSONL transcript），判断：
    - 正常的长步骤（例如测试套件在跑、读大文件、子 agent 审查中）→ current 写 `watch_ok=<now>`，静默。
    - 在重复同一类工具调用 / 同一个报错，或在做与任务无关的事 → SendMessage 给 `worker-T-0NN`：「看门狗：你已 <out/tree 分钟> 没有实质进展，最近在 <一句话概括>。换个思路；若确实做不下去，按 /task:auto 返回 `BLOCKED` 或 `NEEDS_DECISION` 报告（同一口令）。」current 写 `nudged=<now>`。
    - 两种情况都在 `run.log` 追加 `<时间> | T-0NN | WATCHDOG | <脚本输出> | <正常/已催促>`。

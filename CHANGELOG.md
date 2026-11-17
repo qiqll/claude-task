@@ -4,7 +4,7 @@ All notable changes to the `task` plugin. Versions follow [semver](https://semve
 
 ## 0.3.8 — 2026-11-17
 
-- Loop watchdog: each heartbeat runs `worker_progress.sh`, which reads file timestamps only. `IDLE` means the worker's output has not grown for 30 minutes. `SPIN` means output is still growing, but the repo has had no new commit and no file change for 60 minutes. On either, the dispatcher reads the last 6 KB of output: a legitimate long step (a test suite, a review) is left alone for an hour; repetition or drift gets one `SendMessage` nudge; still stalled 40 minutes after the nudge, the worker is stopped and handled as `FAILED（停滞）`. Each check is logged as a `WATCHDOG` line in `run.log`. The 3-hour timeout stays as the backstop. Not applied in `review_pending`, where the worker is waiting on purpose.
+- Loop watchdog: each heartbeat runs `worker_progress.sh`, which reads file timestamps only. `IDLE` means the worker's output has not grown for 30 minutes. `SPIN` means output is still growing, but the repo has had no new commit and no file change for 60 minutes. On either, the dispatcher reads the worker's last 15 actions (`worker_progress.sh --recent`, tool names plus the start of inputs and results, parsed from the transcript): a legitimate long step (a test suite, a review) is left alone for an hour; repetition or drift gets one `SendMessage` nudge; still stalled 40 minutes after the nudge, the worker is stopped and handled as `FAILED（停滞）`. Each check is logged as a `WATCHDOG` line in `run.log`. The 3-hour timeout stays as the backstop. Not applied in `review_pending`, where the worker is waiting on purpose.
 
 ## 0.3.7 — 2026-11-17
 
