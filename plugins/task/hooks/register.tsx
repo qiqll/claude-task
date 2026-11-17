@@ -436,6 +436,11 @@ async function settleAgents($: EngineInterface) {
   await showStatus($, await read($, snapshot), await $.clock.now())
 }
 
+/** Rows worth a line: one with neither a label nor a type (left by an older version) is skipped. */
+function namedAgents(list: AgentRow[]): AgentRow[] {
+  return list.filter(a => a.label.trim() || a.type.trim())
+}
+
 function upsertAgent(list: AgentRow[], row: AgentRow): AgentRow[] {
   const rest = list.filter(a => a.id !== row.id)
   return [...rest, row].slice(-MAX_AGENTS)
@@ -765,7 +770,8 @@ async function drawPane($: EngineInterface, els: Els, cols: number) {
   const c = snap.counts
   const s = snap.session
   const now = Math.max(snap.readAt, await read($, nowAtom))
-  const [agentList, filterKey, opened] = await Promise.all([read($, agents), read($, filter), read($, openTask)])
+  const [allAgents, filterKey, opened] = await Promise.all([read($, agents), read($, filter), read($, openTask)])
+  const agentList = namedAgents(allAgents)
   const active = FILTERS.find(f => f.key === filterKey) ?? FILTERS[0]!
   const tile = tileWidth(cols, Object.values(L.stats))
   const shown = snap.tasks.filter(active.match)
@@ -934,7 +940,7 @@ export const register: Register = (on, options) => {
     const printReport = async (all: boolean) => {
       await currentStrings($)
       const snap = await read($, snapshot)
-      if (snap) return reportText(snap, await read($, agents), await read($, busyTurn), await $.clock.now(), all)
+      if (snap) return reportText(snap, namedAgents(await read($, agents)), await read($, busyTurn), await $.clock.now(), all)
       const err = await read($, lastError)
       return err ? `${L.title}\n${err}\n${L.retryHint}` : L.loading
     }
@@ -1001,6 +1007,8 @@ export const register: Register = (on, options) => {
     const now = await $.clock.now()
     await update($, agents, list => {
       const row = list.find(a => a.id === e.agent_id)
+      // A stop with no start seen and no type names nothing: no row rather than a blank one.
+      if (!row && !e.agent_type) return list
       const summary = (e.last_assistant_message ?? '').split('\n').find(l => l.trim())?.slice(0, 120) ?? ''
       return upsertAgent(
         list,
