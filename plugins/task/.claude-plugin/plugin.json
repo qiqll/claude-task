@@ -1,6 +1,6 @@
 {
   "name": "task",
-  "version": "0.3.5",
+  "version": "0.3.6",
   "description": "Turn Claude Code into a delivery team: dump requests into a backlog, a dispatcher sends each to a fresh worker agent, re-runs your tests and only accepts verified work. Live side pane + status line. · 把 Claude Code 变成交付团队：需求进任务池，后台 worker 逐个交付、机器验收，面板实时看进度",
   "types": "./types/index.d.ts",
   "author": {

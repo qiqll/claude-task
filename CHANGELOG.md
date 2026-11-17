@@ -2,6 +2,10 @@
 
 All notable changes to the `task` plugin. Versions follow [semver](https://semver.org/); the version in `plugins/task/.claude-plugin/plugin.json` is what Claude Code uses to detect updates.
 
+## 0.3.6 — 2026-11-17
+
+- Expanded task details (T-012): long text wraps to fill each line. The host wraps at spaces only, so a Chinese run after a space used to move down whole and leave the line before half empty; titles, field values and note clauses are now pre-wrapped to their column (CJK breaks between any two characters, Latin words stay whole, closing punctuation never starts a line). Emoji and CJK beyond the BMP count as two cells.
+
 ## 0.3.5 — 2026-11-17
 
 - Recent log on a narrow pane: the date-time and task ID keep their width on one line; only the detail is truncated (long `DONE→待验证` rows used to wrap the time and ID onto two lines).
