@@ -1,0 +1,32 @@
+name: Bug report / 问题反馈
+description: Something doesn't work as documented · 功能与文档不符
+labels: [bug]
+body:
+  - type: input
+    id: versions
+    attributes:
+      label: Versions / 版本
+      description: "`claude --version` and the task plugin version shown in `/plugin`"
+      placeholder: "Claude Code 2.1.x, task 0.3.1"
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area / 模块
+      options: ["/task:loop (auto loop)", "/task:next", "/task:add", "/task:init", "/task:status", "/task-dash pane / status line", "qtask", "Install / update"]
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened / 现象
+      description: What you did, what you expected, what happened instead. · 操作、预期、实际结果
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: run.log / screenshot（optional）
+      description: "Relevant lines from `.claude/auto/run.log`, or a screenshot of the pane. Remove anything private. · 去掉敏感信息"
+      render: text

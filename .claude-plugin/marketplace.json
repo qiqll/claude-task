@@ -1,14 +1,25 @@
 {
   "name": "claude-task",
   "owner": {
-    "name": "qiqll"
+    "name": "qiqll",
+    "url": "https://github.com/qiqll"
   },
-  "description": "Claude Code 异步任务流水线：任务池技能 + 实时面板",
+  "description": "Async task pipeline for Claude Code: backlog in, reviewed & test-verified commits out · Claude Code 异步任务流水线",
   "plugins": [
     {
       "name": "task",
       "source": "./plugins/task",
-      "description": "task:* 任务池技能（录入/单步/自动循环/状态）+ 右侧面板与状态行"
+      "description": "Backlog in, reviewed & test-verified commits out. A dispatcher hands each task to a fresh background worker, re-runs your tests, and shows progress in a live pane. · 需求进任务池，后台 worker 逐个交付、机器验收，面板实时看进度",
+      "version": "0.3.1",
+      "homepage": "https://qiqll.github.io/claude-task/",
+      "category": "productivity",
+      "keywords": [
+        "backlog",
+        "autonomous-agent",
+        "task",
+        "workflow",
+        "dashboard"
+      ]
     }
   ]
 }

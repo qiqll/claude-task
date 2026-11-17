@@ -1,7 +1,7 @@
 {
   "name": "task",
-  "version": "0.3.0",
-  "description": "异步任务流水线：task:* 技能（init/add/next/loop/auto/status）维护 .claude/backlog.md 任务池，配右侧面板与状态行实时展示进度",
+  "version": "0.3.1",
+  "description": "Turn Claude Code into a delivery team: dump requests into a backlog, a dispatcher sends each to a fresh worker agent, re-runs your tests and only accepts verified work. Live side pane + status line. · 把 Claude Code 变成交付团队：需求进任务池，后台 worker 逐个交付、机器验收，面板实时看进度",
   "types": "./types/index.d.ts",
   "author": {
     "name": "qiqll"
@@ -13,8 +13,12 @@
     "backlog",
     "workflow",
     "agent-loop",
+    "autonomous-agent",
+    "async",
+    "project-management",
     "dashboard",
-    "pane"
+    "pane",
+    "code-review"
   ],
   "userConfig": {
     "language": {
@@ -28,5 +32,6 @@
       ],
       "default": "auto"
     }
-  }
+  },
+  "homepage": "https://qiqll.github.io/claude-task/"
 }

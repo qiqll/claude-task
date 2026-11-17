@@ -1,112 +1,166 @@
+<div align="center">
+
 # claude-task
 
-**Claude Code 异步任务流水线**：一个插件装齐——`task:*` 技能维护 `.claude/backlog.md` 任务池（录入、单步交付、后台 worker 自动循环、机器验收），右侧面板和输入框下方状态行实时展示进度。
+**Turn Claude Code from an assistant into a delivery team.**
 
-## 安装
+Dump requirements into a backlog and walk away. A dispatcher hands each task to a fresh worker agent, re-runs your tests itself, and only calls it delivered when the machine agrees.
 
-在 Claude Code 终端会话的输入框里：
+[中文](README.zh-CN.md) · [Website](https://qiqll.github.io/claude-task/) · [Changelog](CHANGELOG.md)
 
 ```text
 /plugin install task --marketplace qiqll/claude-task
 ```
 
-提示 `Add marketplace?` 时按 `y`，选择安装范围（推荐 user），然后**新开一个会话**生效。
+<!-- Uncomment after adding docs/assets/demo.gif / 加入 GIF 后取消注释
+<img src="docs/assets/demo.gif" alt="claude-task demo: add requests, run the loop, watch the pane update" width="820">
+-->
 
-## 命令
+</div>
 
-| 命令 | 作用 |
+## Why
+
+**1. From assistant to team.** Your main session only does three things: listen, dispatch, accept. Implementation goes to a background worker with a fresh context, and review goes to `code-reviewer` / `security-analyst`. You talk to a project lead, not to an assistant too busy coding to listen.
+
+**2. Every request is a ticket, delivered to engineering standards.** A casual request becomes a ticket with an ID, a priority and acceptance criteria. It then goes through implementation, a review gate and a test run by the dispatcher itself, lands in "to verify", and is archived only after you confirm. Every step lives in plain Markdown in your repo, so it's traceable and diffable.
+
+**3. Fully async: fire and forget.** No more staying in sync with the agent, and no more waiting for one thing to finish before asking for the next. Speak up any time in the session, or run `qtask "…"` from any terminal; the current task isn't interrupted. Anything that needs your call goes to a decision queue, and everything else keeps moving with the most conservative choice.
+
+**4. Everything visible at a glance.** A side pane and a status line show what's running, what's done, what's left and what's waiting on you. Toasts fire when a task needs verification or a decision, or gets blocked. Completion rate, first-pass rate and median cycle time are included.
+
+### Guardrails that let you walk away
+
+- **Doesn't trust the worker's word.** A task counts as done only after the dispatcher re-runs the tests itself.
+- **Catches weakened tests.** Deleted cases, new skips and fewer assertions are detected automatically.
+- **Asks first on high-risk choices.** Schema/migrations, auth/crypto, billing, data deletion, public APIs, deployment and dependencies: if there's more than one way to do it, it stops and lets you decide.
+- **Rolls back failures.** Failed changes are reverted and kept under `refs/auto-failed/*` for review. A task that fails twice is marked blocked.
+- **Stays off main and never pushes.** It stops on a `STOP` file, when the task or time budget runs out, or after three rounds without progress.
+
+> A typical day: before logging off, dump your pending requests and run `/task:loop`. Next morning, review a batch of tasks in "to verify" and answer a few decisions.
+
+## Install
+
+In a Claude Code terminal session, type:
+
+```text
+/plugin install task --marketplace qiqll/claude-task
+```
+
+Answer `y` to `Add marketplace?`, pick an install scope (user is recommended), then **start a new session**.
+
+### Get started in three steps
+
+```text
+/task:init                          # create the task pool in your project root
+/task:add add CSV export to orders  # plain language; several requests at once is fine
+/task:loop                          # start the loop (needs a git repo, not on main)
+```
+
+### Update
+
+Third-party marketplaces don't auto-update by default. To get a new version:
+
+```text
+/plugin marketplace update claude-task
+```
+
+Then update the task plugin from the `/plugin` menu and start a new session. You can also turn on auto-update for `claude-task` under `/plugin` → Marketplaces. **Don't upgrade while a loop is running** (see below).
+
+## Commands
+
+| Command | What it does |
 |---|---|
-| `/task:init` | 在项目根建任务池：`.claude/backlog.md` / `dev-plan.md` / `dev-progress.md` + `inbox/` `auto/` 运行目录 |
-| `/task:add <需求>` | 口语化需求 → 规范条目（分配 ID、判优先级、写验收标准），只录入不实施 |
-| `/task:next [T-NNN]` | 手动单步：挑一个任务实施 → 审查门禁 → 提交 → 转「待验证」后停下 |
-| `/task:loop [max=10] [hours=8]` | 自动循环：主会话只调度，每个任务派后台 worker（`/task:auto`），机器重跑测试验收 |
-| `/task:status` | 全局视图：各优先级计数、待决策、阻塞、下一步建议 |
-| `/task-dash [report [all]\|inline\|off\|on]` | 全屏布局下打开右侧面板，否则把完整快照输出到对话里；`report all` 列出全部任务；`off`/`on` 隐藏或恢复状态行 |
-| `qtask "描述"` | 在自己的终端里往运行中的循环投递任务 / 决策（需单独安装，见下） |
+| `/task:init` | Creates the task pool in the project root: `.claude/backlog.md` / `dev-plan.md` / `dev-progress.md` plus the `inbox/` and `auto/` runtime directories |
+| `/task:add <request>` | Turns a plain-language request into a ticket (ID, priority, acceptance criteria). Records only; doesn't implement |
+| `/task:next [T-NNN]` | Manual single step: implements one task → review gate → commit → "to verify", then stops |
+| `/task:loop [max=10] [hours=8]` | Autonomous loop: the main session only dispatches; each task goes to a background worker (`/task:auto`) and is accepted after the tests are re-run |
+| `/task:status` | Overview: counts per priority, decisions, blockers, suggested next step |
+| `/task-dash [report [all]\|inline\|off\|on]` | Opens the side pane in fullscreen layout; otherwise prints a full snapshot into the conversation. `report all` lists every task; `off`/`on` hides or restores the status line |
+| `qtask "…"` | Sends a task or decision to a running loop from your own terminal (separate install, see below) |
 
-状态机：`待开始 → 进行中 → 待验证 → 已完成`，旁路 `阻塞` / `待决策` / `打回`。任务完成态是「待验证」，需求方确认后才归档。
+States: `To do → In progress → To verify → Done`, with side states `Blocked` / `Decision` / `Rejected`. A task's finished state is "to verify"; it's archived only after you confirm.
 
-`/task:loop` 需要 git 仓库（记开工 SHA、按提交验收）；`/task:add` `/task:next` `/task:status` 不需要。自动循环运行期间不要升级本插件（技能路径带版本号，升级会让运行中的循环找不到脚本）。
+`/task:loop` needs a git repo (it records the starting SHA and accepts by commit). `/task:add`, `/task:next` and `/task:status` don't. Don't upgrade the plugin while a loop is running: skill paths include the version number, so an upgrade makes the running loop lose its scripts.
 
-### qtask（可选）
+### qtask (optional)
 
-插件的 `bin/` 只在 Claude 的 Bash 工具里可用，你自己的终端里没有。想在终端投递，装一份到 PATH：
+The plugin's `bin/` is only on the PATH of Claude's Bash tool, not your own terminal. To send tasks from your terminal, install a copy:
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/qiqll/claude-task/main/plugins/task/bin/qtask -o ~/.local/bin/qtask && chmod +x ~/.local/bin/qtask
 qtask -h
 ```
 
-不装也行：在调度会话里直接说「加个任务：…」「T-0NN 选 A」，效果相同。
+You can skip it: saying "add a task: …" or "T-0NN pick A" in the dispatcher session does the same thing.
 
-## 面板与状态行
+## Pane and status line
 
-| 位置 | 内容 | 操作 |
+| Where | Shows | Controls |
 |---|---|---|
-| 输入框下方状态行 | `任务流水线 ● 运行中 · T-071 标题 · 12m · 待验证 2 · 待决策 1 · /task-dash` | `/task-dash off` / `on` |
-| 右侧面板 | 循环状态、当前任务、指标、可筛选任务列表、待决策、人工阻塞、Agent、最近流水 | `/task-dash` 打开；`ctrl+x tab` 聚焦，`r` 刷新，`Esc` 或 `ctrl+x x` 关闭 |
-| 提醒 | 任务进入待验证 / 待决策 / 阻塞时弹 toast | — |
+| Status line under the input | `Task Pipeline ● Running · T-071 title · 12m · To verify 2 · Decision 1 · /task-dash` | `/task-dash off` / `on` |
+| Side pane | Loop state, current task, metrics, filterable task list, decisions, human blockers, agents, recent log | `/task-dash` opens it; `ctrl+x tab` focuses, `r` refreshes, `Esc` or `ctrl+x x` closes |
+| Toasts | Fire when a task enters to verify / decision / blocked | — |
 
-**右侧停靠需要 Claude Code 的全屏布局**，且终端至少 110 列：
+**Docking on the right needs Claude Code's fullscreen layout** and a terminal at least 110 columns wide:
 
 ```sh
-CLAUDE_CODE_NO_FLICKER=1 claude      # 或在 ~/.zshrc 里 export
+CLAUDE_CODE_NO_FLICKER=1 claude      # or export it in ~/.zshrc
 ```
 
-不满足时 `/task-dash` 不会把面板插到输入框上方挡住输出，而是把完整快照（当前任务、指标、任务列表、待决策、人工阻塞、Agent、最近流水）作为一条命令输出打进对话，随对话滚动、不占模型 token；想要可交互的面板用 `/task-dash inline`，`Esc` 关闭。
+Otherwise `/task-dash` doesn't push a pane above the input and cover your output. It prints the full snapshot (current task, metrics, task list, decisions, human blockers, agents, recent log) as command output in the conversation, where it scrolls with the chat and uses no model tokens. For an interactive pane anyway, use `/task-dash inline`; `Esc` closes it.
 
-### 界面语言
+### Interface language
 
-面板、状态行和提醒跟随操作系统语言（中文系统显示中文，其余英文）。判定顺序：插件设置 `language` → `LC_ALL` → macOS 系统首选语言 → `LC_MESSAGES` → `LANG` → 运行时 locale。系统语言优先于 `LANG`，因为终端常设 `en_US` 而系统是中文；`LC_ALL` 是显式覆盖，排在最前。
+The pane, status line and toasts follow your OS language (Chinese systems get Chinese, everything else English). Order of precedence: the plugin's `language` setting → `LC_ALL` → macOS preferred language → `LC_MESSAGES` → `LANG` → runtime locale. The system language wins over `LANG` because terminals often set `en_US` on a Chinese system; `LC_ALL` is an explicit override, so it comes first.
 
-固定某种语言：`/config` 里把 task 插件的 `language` 设为 `zh` 或 `en`。任务池内容（标题、备注）按原文显示，不翻译。
+To pin a language, set the task plugin's `language` to `zh` or `en` in `/config`. Task pool content (titles, notes) is shown as written, not translated.
 
-### 指标口径
+### Metrics
 
-| 指标 | 算法 |
+| Metric | Definition |
 |---|---|
-| 完成率 | 已归档 /（已归档 + 未关闭任务） |
-| 交付率 | （已归档 + 待验证）/ 同上 |
-| 一次通过 | 交付过的任务中，从未出现「打回重做」的比例（按任务计） |
-| 7 日交付 | 近 7 天 run.log 中 `DONE→` 事件数 |
-| 中位周期 | run.log 中 `DISPATCH` 到结果事件的中位时长 |
-| 疑似中断 | 循环在跑或等待任务，但 3 小时无任何活动，或已超出时长预算 3 小时以上 |
+| Done | archived / (archived + open tasks) |
+| Delivered | (archived + to verify) / same |
+| First pass | share of delivered tasks that were never rejected (per task) |
+| 7d delivered | `DONE→` events in run.log over the last 7 days |
+| Median cycle | median time from `DISPATCH` to the result event in run.log |
+| Possibly interrupted | the loop is running or waiting but has had no activity for 3 hours, or is more than 3 hours past its time budget |
 
-## 文件
+## Files
 
 ```text
 .claude/
-├── backlog.md        # P0–P3 任务表、待决策、人工阻塞、ID 规则（需求方入口）
-├── dev-plan.md       # AI 维护的排期与进行中任务
-├── dev-progress.md   # 已归档任务（### T-NNN）
-├── inbox/            # qtask / 调度员投递，循环单点合并
-└── auto/             # current / session / run.log / STOP（运行态，gitignore）
+├── backlog.md        # P0–P3 tasks, decisions, human blockers, ID rules (your entry point)
+├── dev-plan.md       # schedule and in-progress tasks, maintained by the AI
+├── dev-progress.md   # archived tasks (### T-NNN)
+├── inbox/            # drops from qtask / the dispatcher, merged by the loop
+└── auto/             # current / session / run.log / STOP (runtime, gitignored)
 ```
 
-## 审查门禁与专业 agent
+## Review gate and specialist agents
 
-`/task:next` 与 worker 交付前会派 `code-reviewer`（涉及认证 / 用户输入 / 上传 / 加密时加 `security-analyst`）审查改动。环境里没有这些 agent 时，技能改派 `general-purpose` 子 agent 做同样的只读审查。项目 `CLAUDE.md` 有更严的门禁或测试口径时以项目为准。
+Before delivering, `/task:next` and the worker send the change to `code-reviewer`, plus `security-analyst` when it touches auth, user input, uploads or crypto. If those agents aren't installed, the skills use a `general-purpose` subagent for the same read-only review. If your project's `CLAUDE.md` defines a stricter gate or test scope, the project wins.
 
-## 从旧版迁移
+## Migrating from the old version
 
-用过本地 `~/.claude/skills/task-*` 或 `task-dash@claude-task-dash` 的：
+If you used local `~/.claude/skills/task-*` or `task-dash@claude-task-dash`:
 
 ```sh
-claude plugin uninstall task-dash          # 旧面板插件（若装过）
+claude plugin uninstall task-dash          # old pane plugin, if installed
 rm -rf ~/.claude/skills/task-{init,add,next,loop,auto,status}
 ```
 
-再把项目 / 全局 `CLAUDE.md` 里的 `/task-add` `/task-next` `/task-loop` `/task-status` 改成 `/task:add` 等。任务池文件格式不变，已有 `.claude/backlog.md` 直接可用。
+Then change `/task-add`, `/task-next`, `/task-loop`, `/task-status` in your project or global `CLAUDE.md` to `/task:add` and so on. The task pool format is unchanged, so an existing `.claude/backlog.md` works as is.
 
-## 开发
+## Development
 
 ```sh
 claude plugin validate plugins/task
 claude plugin test plugins/task
-claude --plugin-dir plugins/task     # 从源码加载
+claude --plugin-dir plugins/task     # load from source
 ```
 
-本仓库自身也用这套任务池管理，见 `.claude/`。
+This repo manages itself with the same task pool; see `.claude/`.
 
 ## License
 

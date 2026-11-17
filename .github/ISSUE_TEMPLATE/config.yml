@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Docs / 文档
+    url: https://github.com/qiqll/claude-task#readme
+    about: Install, update and command reference · 安装、更新与命令说明

@@ -1,0 +1,488 @@
+<!DOCTYPE html>
+<!--
+  assets/og.png (og:image / twitter:image) is exported from assets/og.svg at 1200x630.
+  Re-export after editing the SVG, e.g.:
+    rsvg-convert -w 1200 -h 630 docs/assets/og.svg -o docs/assets/og.png
+  Optional: drop a screen recording at docs/assets/demo.gif; the page hides the slot if it is missing.
+  All copy is taken from docs/promo/messaging.md. Change wording there first.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>claude-task: Turn Claude Code from an assistant into a delivery team</title>
+<meta name="description" content="Async task pipeline for Claude Code: backlog in, reviewed & test-verified commits out, live progress pane.">
+<meta name="color-scheme" content="dark light">
+<link rel="canonical" href="https://qiqll.github.io/claude-task/">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23161412'/%3E%3Cpath d='M9 11l6 5-6 5' fill='none' stroke='%23f0955f' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/%3E%3Cpath d='M18 22h6' stroke='%23f0955f' stroke-width='3' stroke-linecap='round'/%3E%3C/svg%3E">
+
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="claude-task">
+<meta property="og:title" content="Turn Claude Code from an assistant into a delivery team">
+<meta property="og:description" content="Async task pipeline for Claude Code: backlog in, reviewed & test-verified commits out, live progress pane.">
+<meta property="og:url" content="https://qiqll.github.io/claude-task/">
+<meta property="og:image" content="https://qiqll.github.io/claude-task/assets/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Turn Claude Code from an assistant into a delivery team">
+<meta name="twitter:description" content="Async task pipeline for Claude Code: backlog in, reviewed & test-verified commits out, live progress pane.">
+<meta name="twitter:image" content="https://qiqll.github.io/claude-task/assets/og.png">
+
+<script>
+/* Enhancement only: mark JS as available and pick the language before first paint. */
+(function () {
+  var d = document.documentElement;
+  d.classList.add('js');
+  var l = null;
+  try { l = localStorage.getItem('ct-lang'); } catch (e) {}
+  if (l !== 'en' && l !== 'zh') {
+    l = (navigator.language || '').toLowerCase().indexOf('zh') === 0 ? 'zh' : 'en';
+  }
+  d.setAttribute('data-ui', l);
+  d.lang = l === 'zh' ? 'zh-CN' : 'en';
+})();
+</script>
+
+<style>
+:root {
+  --bg: #12110f;
+  --bg-2: #1a1816;
+  --surface: #1f1d1a;
+  --border: #34302b;
+  --text: #f2efe9;
+  --muted: #b3ada3;
+  --accent: #f0955f;
+  --accent-ink: #1a0e05;
+  --accent-soft: rgba(240, 149, 95, .14);
+  --term-bg: #0d0c0b;
+  --radius: 12px;
+  --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  --sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+}
+@media (prefers-color-scheme: light) {
+  :root {
+    --bg: #faf8f4;
+    --bg-2: #f1ede6;
+    --surface: #ffffff;
+    --border: #ddd6ca;
+    --text: #1d1b18;
+    --muted: #5b564e;
+    --accent: #a8481a;
+    --accent-ink: #ffffff;
+    --accent-soft: rgba(168, 72, 26, .10);
+    --term-bg: #1a1816;
+  }
+}
+*, *::before, *::after { box-sizing: border-box; }
+html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0; background: var(--bg); color: var(--text);
+  font: 16px/1.6 var(--sans); -webkit-font-smoothing: antialiased;
+}
+a { color: var(--accent); text-underline-offset: 3px; }
+a:hover { text-decoration-thickness: 2px; }
+code { font-family: var(--mono); font-size: .9em; background: var(--accent-soft); padding: .1em .35em; border-radius: 5px; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 4px; }
+.skip { position: absolute; left: -999px; top: 8px; background: var(--accent); color: var(--accent-ink); padding: 8px 12px; border-radius: 6px; z-index: 10; }
+.skip:focus { left: 8px; }
+
+/* language: English by default, Chinese hidden. JS flips data-lang on <html>. */
+body [data-lang="zh"] { display: none; }
+html[data-ui="zh"] body [data-lang="en"] { display: none; }
+html[data-ui="zh"] body [data-lang="zh"] { display: revert; }
+
+.wrap { max-width: 1040px; margin: 0 auto; padding: 0 20px; }
+section { padding: 72px 0; }
+section + section { border-top: 1px solid var(--border); }
+h1, h2, h3 { line-height: 1.2; margin: 0; letter-spacing: -.02em; }
+h2 { font-size: clamp(1.5rem, 3.5vw, 2rem); margin-bottom: 12px; }
+h3 { font-size: 1.1rem; margin-bottom: 8px; letter-spacing: -.01em; }
+.lede { color: var(--muted); max-width: 62ch; margin: 0 0 36px; font-size: 1.05rem; }
+.eyebrow { font: 600 .8rem/1 var(--mono); color: var(--accent); text-transform: uppercase; letter-spacing: .08em; margin-bottom: 14px; display: block; }
+
+/* top bar */
+.top { display: flex; align-items: center; justify-content: space-between; padding: 18px 0; gap: 12px; }
+.brand { font: 700 1rem var(--mono); color: var(--text); text-decoration: none; }
+.brand span { color: var(--accent); }
+.lang { display: none; border: 1px solid var(--border); border-radius: 999px; padding: 2px; background: var(--surface); }
+.js .lang { display: inline-flex; }
+.lang button {
+  font: 600 .85rem var(--sans); color: var(--muted); background: none; border: 0; border-radius: 999px;
+  padding: 6px 14px; min-height: 32px; cursor: pointer;
+}
+.lang button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
+
+/* hero */
+.hero { padding: 40px 0 72px; }
+.hero h1 { font-size: clamp(2rem, 6vw, 3.4rem); max-width: 18ch; }
+.hero h1 em { font-style: normal; color: var(--accent); }
+.hero .sub { color: var(--muted); font-size: clamp(1rem, 2.2vw, 1.2rem); max-width: 60ch; margin: 20px 0 28px; }
+.install {
+  display: flex; align-items: stretch; max-width: 640px; background: var(--term-bg);
+  border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden;
+}
+.install code {
+  flex: 1; min-width: 0; background: none; border-radius: 0; color: #f2efe9; padding: 14px 16px;
+  font-size: .92rem; overflow-x: auto; white-space: nowrap; display: flex; align-items: center; gap: 8px;
+}
+.install code::before { content: "›"; color: #f0955f; }
+.copy {
+  display: none; font: 600 .85rem var(--sans); border: 0; border-left: 1px solid #34302b; background: #26231f; color: #f2efe9;
+  padding: 0 18px; min-width: 84px; cursor: pointer;
+}
+.js .copy { display: block; }
+.copy:hover { background: #322e29; }
+.copy.done { background: var(--accent); color: var(--accent-ink); }
+.hint { color: var(--muted); font-size: .85rem; margin: 10px 0 0; }
+.cta { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 24px; }
+.btn {
+  display: inline-flex; align-items: center; gap: 8px; padding: 11px 20px; border-radius: 10px; font-weight: 600;
+  text-decoration: none; border: 1px solid var(--border); color: var(--text); background: var(--surface); min-height: 44px;
+}
+.btn:hover { border-color: var(--accent); }
+.btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.btn.primary:hover { filter: brightness(1.08); }
+
+/* demo gif slot */
+.demo { margin: 48px 0 0; }
+.demo[hidden] { display: none; }
+.demo img { display: block; width: 100%; height: auto; border-radius: var(--radius); border: 1px solid var(--border); }
+
+/* terminal mock */
+.term { background: var(--term-bg); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; color: #e8e4dc; font: .88rem/1.55 var(--mono); margin-top: 48px; }
+.term-bar { display: flex; align-items: center; gap: 8px; padding: 10px 14px; background: #1a1816; border-bottom: 1px solid #2c2925; color: #a39d92; font-size: .78rem; }
+.term-bar i { width: 10px; height: 10px; border-radius: 50%; background: #3a3631; display: inline-block; }
+.term-bar .tag { margin-left: auto; border: 1px dashed #5a544b; padding: 1px 8px; border-radius: 999px; }
+.term-body { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); }
+.pane { padding: 16px; min-width: 0; }
+.pane + .pane { border-left: 1px solid #2c2925; background: #11100e; }
+.dim { color: #a39d92; }
+.acc { color: #f0955f; }
+.line { white-space: pre-wrap; overflow-wrap: anywhere; margin: 0 0 6px; }
+.status { margin-top: 14px; padding: 8px 10px; border-top: 1px solid #2c2925; color: #cfc9be; font-size: .8rem; overflow-wrap: anywhere; }
+.pane h4 { margin: 0 0 10px; font: 600 .75rem var(--mono); color: #a39d92; text-transform: uppercase; letter-spacing: .08em; }
+.tasks { list-style: none; margin: 0; padding: 0; }
+.tasks li { display: grid; grid-template-columns: auto auto 1fr; gap: 8px; padding: 6px 0; border-bottom: 1px solid #221f1c; align-items: baseline; }
+.tasks li:last-child { border: 0; }
+.tasks .id { color: #a39d92; }
+.tasks .st { grid-column: 3; font-size: .74rem; color: #a39d92; }
+.tasks .name { grid-column: 3; }
+.mark { font-weight: 700; }
+.s-run .mark { color: #f0955f; }
+.s-ver .mark { color: #e8e4dc; }
+.s-dec .mark { color: #f0955f; }
+.s-done .mark, .s-done .name { color: #8b857a; }
+.s-run .st { color: #f0955f; }
+.s-blk .mark, .s-rej .mark { color: #f0955f; }
+.s-todo .mark { color: #a39d92; }
+.pulse { animation: pulse 1.6s ease-in-out infinite; }
+@keyframes pulse { 50% { opacity: .35; } }
+
+/* cards */
+.grid { display: grid; gap: 16px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+@media (max-width: 640px) { .grid { grid-template-columns: 1fr; } }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 24px; }
+.card .n { font: 700 .8rem var(--mono); color: var(--accent); margin-bottom: 10px; display: block; }
+.card p { margin: 0; color: var(--muted); font-size: .95rem; }
+
+/* flow */
+.flow { list-style: none; counter-reset: s; margin: 0 0 32px; padding: 0; display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr)); }
+.flow li { counter-increment: s; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; position: relative; font-size: .93rem; }
+.flow li::before { content: counter(s); font: 700 .75rem var(--mono); color: var(--accent); display: block; margin-bottom: 4px; }
+.flow li.gate { border-color: var(--accent); background: var(--accent-soft); }
+.flow small { display: block; color: var(--muted); margin-top: 2px; font-size: .8rem; }
+.async { background: var(--bg-2); border: 1px solid var(--border); border-radius: var(--radius); padding: 22px 24px; }
+.async h3 { margin-bottom: 10px; }
+.async ul { margin: 0; padding-left: 20px; color: var(--muted); }
+.async li + li { margin-top: 6px; }
+
+/* guardrails */
+.rails { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+.rails li { display: grid; grid-template-columns: 28px 1fr; gap: 12px; padding: 16px 18px; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; }
+.rails li::before { content: "✓"; color: var(--accent); font-weight: 700; }
+.rails b { display: block; }
+.rails span { color: var(--muted); font-size: .93rem; }
+
+/* quick start */
+.steps { list-style: none; margin: 0 0 24px; padding: 0; display: grid; gap: 16px; }
+.steps li { display: grid; grid-template-columns: 36px minmax(0, 1fr); gap: 14px; }
+.steps .num { width: 36px; height: 36px; border-radius: 50%; background: var(--accent); color: var(--accent-ink); font-weight: 700; display: grid; place-items: center; }
+.steps pre { margin: 8px 0 0; background: var(--term-bg); color: #f2efe9; border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; font: .88rem/1.5 var(--mono); overflow-x: auto; }
+.steps p { margin: 0; color: var(--muted); }
+.steps strong { color: var(--text); }
+.note { border-left: 3px solid var(--accent); background: var(--accent-soft); padding: 12px 16px; border-radius: 0 8px 8px 0; font-size: .93rem; }
+
+footer { border-top: 1px solid var(--border); padding: 32px 0 48px; color: var(--muted); font-size: .9rem; }
+footer .wrap { display: flex; flex-wrap: wrap; gap: 12px 24px; justify-content: space-between; }
+footer nav { display: flex; flex-wrap: wrap; gap: 8px 20px; }
+
+@media (max-width: 720px) {
+  section { padding: 52px 0; }
+  .term-body { grid-template-columns: 1fr; }
+  .pane + .pane { border-left: 0; border-top: 1px solid #2c2925; }
+  .copy { min-width: 68px; padding: 0 12px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  .s-blk .mark, .s-rej .mark { color: #f0955f; }
+.s-todo .mark { color: #a39d92; }
+.pulse { animation: none; }
+  * { transition: none !important; }
+}
+</style>
+</head>
+<body>
+<a class="skip" href="#main"><span data-lang="en">Skip to content</span><span data-lang="zh">跳到正文</span></a>
+
+<div class="wrap">
+  <header class="top">
+    <a class="brand" href="#top">claude<span>-</span>task</a>
+    <div class="lang" role="group" aria-label="Language / 语言">
+      <button type="button" data-set="en" aria-pressed="true">EN</button>
+      <button type="button" data-set="zh" aria-pressed="false">中文</button>
+    </div>
+  </header>
+</div>
+
+<main id="main">
+<!-- 1. Hero -->
+<section class="hero" id="top">
+  <div class="wrap">
+    <h1>
+      <span data-lang="en">Turn Claude Code from an assistant into a <em>delivery team</em></span>
+      <span data-lang="zh">把 Claude Code 从助理变成<em>交付团队</em></span>
+    </h1>
+    <p class="sub">
+      <span data-lang="en">Dump requirements into a backlog and walk away. A dispatcher hands each task to a fresh worker agent, re-runs your tests itself, and only calls it delivered when the machine agrees.</span>
+      <span data-lang="zh">需求一股脑丢进任务池就去忙别的。调度员把每个任务派给全新上下文的 worker，亲自重跑测试，机器验收通过才算交付。</span>
+    </p>
+
+    <div class="install">
+      <code id="cmd">/plugin install task --marketplace qiqll/claude-task</code>
+      <button class="copy" type="button" id="copy" aria-label="Copy install command">
+        <span data-lang="en">Copy</span><span data-lang="zh">复制</span>
+      </button>
+    </div>
+    <p class="hint" id="hint">
+      <span data-lang="en">Paste into a Claude Code session, then start a new session.</span>
+      <span data-lang="zh">粘贴到 Claude Code 会话输入框，安装后新开一个会话。</span>
+    </p>
+
+    <div class="cta">
+      <a class="btn primary" href="https://github.com/qiqll/claude-task">
+        <span data-lang="en">View on GitHub</span><span data-lang="zh">在 GitHub 查看</span>
+      </a>
+      <a class="btn" href="#how">
+        <span data-lang="en">How it works</span><span data-lang="zh">工作原理</span>
+      </a>
+    </div>
+
+    <!-- Demo GIF slot: hidden gracefully if assets/demo.gif is missing; the terminal mock below is the fallback. -->
+    <figure class="demo" id="demo" style="margin-bottom:0">
+      <img src="assets/demo.gif" alt="" width="1200" height="675" loading="lazy" onerror="this.parentNode.hidden=true">
+    </figure>
+
+    <!-- 2. Terminal mock -->
+    <div class="term" role="img" aria-label="Illustrative mock of the status line and side pane">
+      <div class="term-bar" aria-hidden="true">
+        <i></i><i></i><i></i>
+        <span>claude</span>
+        <span class="tag"><span data-lang="en">illustrative mock</span><span data-lang="zh">示意图</span></span>
+      </div>
+      <div class="term-body" aria-hidden="true">
+        <div class="pane">
+          <p class="line"><span class="dim">you ›</span> add CSV export to the reports page</p>
+          <p class="line"><span class="acc">●</span> Ticket <b>T-071</b> created (P1, 3 acceptance criteria). Queued.</p>
+          <p class="line"><span class="dim">you ›</span> also: login page flickers on slow networks</p>
+          <p class="line"><span class="acc">●</span> Ticket <b>T-072</b> created. The current task is not interrupted.</p>
+          <div class="status">
+            <span data-lang="en">Task Pipeline</span><span data-lang="zh">任务流水线</span>
+            <span class="acc pulse">●</span>
+            <span data-lang="en">Running</span><span data-lang="zh">运行中</span>
+            · T-071 Add CSV export · 12m ·
+            <span data-lang="en">To verify 2 · Decision 1</span><span data-lang="zh">待验证 2 · 待决策 1</span>
+            · /task-dash
+          </div>
+        </div>
+        <div class="pane">
+          <h4><span data-lang="en">Tasks</span><span data-lang="zh">任务</span></h4>
+          <ul class="tasks">
+            <li class="s-run"><span class="mark">▶</span><span class="id">T-071</span><span class="name">Add CSV export</span><span class="st"><span data-lang="en">In progress</span><span data-lang="zh">进行中</span></span></li>
+            <li class="s-ver"><span class="mark">◐</span><span class="id">T-069</span><span class="name">Paginate audit log</span><span class="st"><span data-lang="en">To verify</span><span data-lang="zh">待验证</span></span></li>
+            <li class="s-dec"><span class="mark">?</span><span class="id">T-070</span><span class="name">Migrate sessions table</span><span class="st"><span data-lang="en">Decision</span><span data-lang="zh">待决策</span></span></li>
+            <li class="s-done"><span class="mark">✓</span><span class="id">T-068</span><span class="name">Fix timezone in daily digest</span><span class="st"><span data-lang="en">Done</span><span data-lang="zh">已完成</span></span></li>
+            <li class="s-blk"><span class="mark">■</span><span class="id">T-066</span><span class="name">Upgrade payment SDK</span><span class="st"><span data-lang="en">Blocked</span><span data-lang="zh">阻塞</span></span></li>
+            <li class="s-rej"><span class="mark">↺</span><span class="id">T-065</span><span class="name">Rename config keys</span><span class="st"><span data-lang="en">Rejected</span><span data-lang="zh">打回</span></span></li>
+            <li class="s-todo"><span class="mark">○</span><span class="id">T-072</span><span class="name">Login page flicker</span><span class="st"><span data-lang="en">To do</span><span data-lang="zh">待开始</span></span></li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 3. Selling points -->
+<section id="why">
+  <div class="wrap">
+    <span class="eyebrow">claude-task</span>
+    <h2><span data-lang="en">Four reasons to hand it the backlog</span><span data-lang="zh">四个理由，放心把任务池交给它</span></h2>
+    <p class="lede"><span data-lang="en">Async task pipeline for Claude Code: backlog in, reviewed &amp; test-verified commits out, live progress pane.</span><span data-lang="zh">异步任务流水线：需求进任务池，后台 agent 逐个交付、机器验收，面板实时看进度。</span></p>
+    <div class="grid">
+      <article class="card">
+        <span class="n">01</span>
+        <h3><span data-lang="en">From assistant to team</span><span data-lang="zh">从助理到团队</span></h3>
+        <p><span data-lang="en">Your main session only listens, dispatches and accepts. Implementation goes to a background worker with a fresh context; review goes to <code>code-reviewer</code> / <code>security-analyst</code>. You talk to a project lead, not to an assistant too busy coding to listen.</span><span data-lang="zh">主会话只做三件事：听你说、派活、验收。具体实现交给全新上下文的后台 worker，代码审查交给 <code>code-reviewer</code> / <code>security-analyst</code>。你面对的是一个项目经理，而不是一个埋头敲代码、顾不上理你的助理。</span></p>
+      </article>
+      <article class="card">
+        <span class="n">02</span>
+        <h3><span data-lang="en">Every request is a ticket, delivered to engineering standards</span><span data-lang="zh">需求即任务，按工程标准交付</span></h3>
+        <p><span data-lang="en">A casual request becomes a ticket (ID, priority, acceptance criteria), then implementation, a review gate, and the dispatcher re-running the tests itself. Archived only after you confirm. Every step lives in plain Markdown in your repo: traceable and diffable.</span><span data-lang="zh">一句口语需求 → 规范任务（ID、优先级、验收标准）→ 实施 → 审查门禁 → 调度员亲自重跑测试 → 「待验证」→ 你确认后归档。每一步都落在仓库里的 Markdown 文件中，可追溯、可 diff。</span></p>
+      </article>
+      <article class="card">
+        <span class="n">03</span>
+        <h3><span data-lang="en">Fully async: fire and forget</span><span data-lang="zh">全异步：想到就丢</span></h3>
+        <p><span data-lang="en">No more waiting for one thing to finish before asking for the next. Speak up any time, or <code>qtask "…"</code> from any terminal; the current task is never interrupted. Anything that needs your call goes to a decision queue; everything else keeps moving with the most conservative choice.</span><span data-lang="zh">不用再和 agent 同频，不用等它做完一件才提下一件。随时在会话里插话，或在任意终端 <code>qtask "描述"</code> 投递；当前任务不受打扰。需要你拍板的挂进「待决策」，其余按最保守的做法继续推进。</span></p>
+      </article>
+      <article class="card">
+        <span class="n">04</span>
+        <h3><span data-lang="en">Everything visible at a glance</span><span data-lang="zh">进度一目了然</span></h3>
+        <p><span data-lang="en">A side pane and a status line show what's running, what's done, what's left and what's waiting on you; toasts fire when a task needs verification or a decision. Completion rate, first-pass rate and median cycle time included.</span><span data-lang="zh">右侧面板 + 输入框下方状态行实时显示：正在做什么、做完了什么、还剩什么、等你决定什么；任务进入待验证 / 待决策 / 阻塞时弹提醒。完成率、一次通过率、中位周期一并给出。</span></p>
+      </article>
+    </div>
+  </div>
+</section>
+
+<!-- 4. How it works -->
+<section id="how">
+  <div class="wrap">
+    <span class="eyebrow"><span data-lang="en">How it works</span><span data-lang="zh">工作原理</span></span>
+    <h2><span data-lang="en">One task at a time, checked by a machine</span><span data-lang="zh">一次一个任务，机器验收</span></h2>
+    <p class="lede"><span data-lang="en">Workers run one at a time, in order. Each gets a fresh context, and no task is called delivered on a worker's word alone.</span><span data-lang="zh">worker 串行执行，一次一个，各自全新上下文；没有任何任务只凭 worker 自述就算交付。</span></p>
+    <ol class="flow">
+      <li><span data-lang="en">Request</span><span data-lang="zh">需求</span><small><span data-lang="en">in plain words</span><span data-lang="zh">口语即可</span></small></li>
+      <li><span data-lang="en">Ticket</span><span data-lang="zh">任务</span><small><span data-lang="en">ID, priority, acceptance criteria</span><span data-lang="zh">ID、优先级、验收标准</span></small></li>
+      <li><span data-lang="en">Worker</span><span data-lang="zh">worker</span><small><span data-lang="en">fresh context, commits</span><span data-lang="zh">全新上下文，提交</span></small></li>
+      <li class="gate"><span data-lang="en">Review gate</span><span data-lang="zh">审查门禁</span><small><span data-lang="en">code review + security</span><span data-lang="zh">代码审查 + 安全</span></small></li>
+      <li class="gate"><span data-lang="en">Dispatcher re-runs tests</span><span data-lang="zh">调度员重跑测试</span><small><span data-lang="en">not the worker's word</span><span data-lang="zh">不信 worker 自述</span></small></li>
+      <li><span data-lang="en">Awaiting verification</span><span data-lang="zh">待验证</span><small><span data-lang="en">the final call is yours</span><span data-lang="zh">最终确认在你</span></small></li>
+      <li><span data-lang="en">You confirm</span><span data-lang="zh">你确认</span><small><span data-lang="en">or send it back</span><span data-lang="zh">或打回重做</span></small></li>
+      <li><span data-lang="en">Archived</span><span data-lang="zh">归档</span><small><span data-lang="en">Markdown in your repo</span><span data-lang="zh">仓库里的 Markdown</span></small></li>
+    </ol>
+    <div class="async">
+      <h3><span data-lang="en">Async inputs, any time</span><span data-lang="zh">异步输入，随时可投</span></h3>
+      <ul>
+        <li><span data-lang="en">Talk to the main session while the loop runs. New requests are queued; the current task is not interrupted.</span><span data-lang="zh">循环运行时直接在会话里说，新需求排进队列，当前任务不受打扰。</span></li>
+        <li><span data-lang="en"><code>qtask "describe it"</code> from any terminal (optional, installed separately), to drop in tasks or answer decisions.</span><span data-lang="zh">在任意终端 <code>qtask "描述"</code> 投递任务或答复决策（可选，需单独安装）。</span></li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- 5. Guardrails -->
+<section id="guardrails">
+  <div class="wrap">
+    <span class="eyebrow"><span data-lang="en">Guardrails</span><span data-lang="zh">护栏</span></span>
+    <h2><span data-lang="en">Why you can walk away</span><span data-lang="zh">为什么敢放手</span></h2>
+    <p class="lede"><span data-lang="en">The loop is built so that a bad run is caught, rolled back and explained, not silently merged.</span><span data-lang="zh">循环的设计目标：出错的一轮会被发现、回滚并留下说明，而不是悄悄合入。</span></p>
+    <ul class="rails">
+      <li><div><b><span data-lang="en">Never trusts the worker's word</span><span data-lang="zh">不信 worker 自述</span></b><span><span data-lang="en">The dispatcher re-runs the tests itself.</span><span data-lang="zh">调度员亲自重跑测试才算完成。</span></span></div></li>
+      <li><div><b><span data-lang="en">Catches cheating</span><span data-lang="zh">防作弊</span></b><span><span data-lang="en">Detects weakened tests: deleted cases, new skips, fewer assertions.</span><span data-lang="zh">自动检测测试被改弱：删用例、加 skip、断言变少。</span></span></div></li>
+      <li><div><b><span data-lang="en">Stops and asks on high-risk choices</span><span data-lang="zh">高风险处停下来问你</span></b><span><span data-lang="en">Schema/migrations, auth/crypto, billing, data deletion, public APIs, deployment, dependencies.</span><span data-lang="zh">schema/迁移、认证/加密、计费、删数据、对外 API、部署、依赖，有多种做法时停下来问你。</span></span></div></li>
+      <li><div><b><span data-lang="en">Failures roll back, with evidence kept</span><span data-lang="zh">失败自动回滚，证据保留</span></b><span><span data-lang="en">Failed attempts are rolled back and kept under <code>refs/auto-failed/*</code> for review; two failures → blocked.</span><span data-lang="zh">失败自动回滚，并保留 <code>refs/auto-failed/*</code> 供你复盘；失败两次转阻塞。</span></span></div></li>
+      <li><div><b><span data-lang="en">Never on main, never pushes</span><span data-lang="zh">不碰主分支，从不 push</span></b><span><span data-lang="en">Never runs on main/master, never pushes; stops on a <code>STOP</code> file, task/time budgets, or three rounds without progress.</span><span data-lang="zh">不在 main/master 上跑，从不 push；<code>STOP</code> 文件、任务数 / 时长预算、连续无进展三重停机。</span></span></div></li>
+    </ul>
+  </div>
+</section>
+
+<!-- 6. Quick start -->
+<section id="start">
+  <div class="wrap">
+    <span class="eyebrow"><span data-lang="en">Quick start</span><span data-lang="zh">快速开始</span></span>
+    <h2><span data-lang="en">Three steps to your first loop</span><span data-lang="zh">三步跑起第一个循环</span></h2>
+    <p class="lede"><span data-lang="en">Run these inside a Claude Code session.</span><span data-lang="zh">以下命令在 Claude Code 会话里执行。</span></p>
+    <ol class="steps">
+      <li><span class="num" aria-hidden="true">1</span><div>
+        <p><strong><span data-lang="en">Install, then open a new session</span><span data-lang="zh">安装，然后新开一个会话</span></strong></p>
+        <pre><code>/plugin install task --marketplace qiqll/claude-task</code></pre></div></li>
+      <li><span class="num" aria-hidden="true">2</span><div>
+        <p><strong><span data-lang="en">In the new session, set up the backlog in your project, then add a task</span><span data-lang="zh">在新会话里为项目建任务池，再录入任务</span></strong></p>
+        <pre><code>/task:init
+/task:add add CSV export to the reports page</code></pre></div></li>
+      <li><span class="num" aria-hidden="true">3</span><div>
+        <p><strong><span data-lang="en">Start the loop and go do something else</span><span data-lang="zh">启动循环，去忙别的</span></strong></p>
+        <pre><code>/task:loop</code></pre></div></li>
+    </ol>
+    <p class="note">
+      <span data-lang="en"><code>/task:loop</code> needs a git repository and a non-main branch. The docked side pane needs Claude Code's full-screen layout (<code>CLAUDE_CODE_NO_FLICKER=1</code>) and a terminal at least 110 columns wide; otherwise <code>/task-dash</code> prints a text snapshot instead.</span>
+      <span data-lang="zh"><code>/task:loop</code> 需要 git 仓库，并且要在非 main 分支上运行。右侧停靠面板需要全屏布局（<code>CLAUDE_CODE_NO_FLICKER=1</code>）且终端不少于 110 列，否则 <code>/task-dash</code> 会输出文字快照。</span>
+    </p>
+  </div>
+</section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <span>MIT License · claude-task</span>
+    <nav aria-label="Footer">
+      <a href="https://github.com/qiqll/claude-task">GitHub</a>
+      <a href="https://github.com/qiqll/claude-task/blob/main/README.md"><span data-lang="en">README</span><span data-lang="zh">README</span></a>
+      <a href="https://github.com/qiqll/claude-task/blob/main/README.zh-CN.md">中文 README</a>
+    </nav>
+  </div>
+</footer>
+
+<script>
+(function () {
+  var d = document.documentElement;
+  var btns = document.querySelectorAll('.lang button');
+
+  function setLang(l, save) {
+    d.setAttribute('data-ui', l);
+    d.lang = l === 'zh' ? 'zh-CN' : 'en';
+    for (var i = 0; i < btns.length; i++) {
+      btns[i].setAttribute('aria-pressed', btns[i].getAttribute('data-set') === l ? 'true' : 'false');
+    }
+    var c = document.getElementById('copy');
+    if (c) c.setAttribute('aria-label', l === 'zh' ? '复制安装命令' : 'Copy install command');
+    document.title = l === 'zh'
+      ? 'claude-task：把 Claude Code 从助理变成交付团队'
+      : 'claude-task: Turn Claude Code from an assistant into a delivery team';
+    if (save) { try { localStorage.setItem('ct-lang', l); } catch (e) {} }
+  }
+  setLang(d.getAttribute('data-ui') || 'en', false);
+  for (var i = 0; i < btns.length; i++) {
+    btns[i].addEventListener('click', function () { setLang(this.getAttribute('data-set'), true); });
+  }
+
+  var copy = document.getElementById('copy');
+  var cmd = document.getElementById('cmd');
+  if (copy && cmd) {
+    var timer;
+    function ok() {
+      copy.classList.add('done');
+      copy.innerHTML = '<span data-lang="en">Copied</span><span data-lang="zh">已复制</span>';
+      clearTimeout(timer);
+      timer = setTimeout(function () {
+        copy.classList.remove('done');
+        copy.innerHTML = '<span data-lang="en">Copy</span><span data-lang="zh">复制</span>';
+      }, 1800);
+    }
+    function fallback() {
+      var r = document.createRange();
+      r.selectNodeContents(cmd);
+      var s = window.getSelection();
+      s.removeAllRanges(); s.addRange(r);
+      try { if (document.execCommand('copy')) ok(); } catch (e) {}
+    }
+    copy.addEventListener('click', function () {
+      var t = cmd.textContent.trim();
+      if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(t).then(ok, fallback);
+      } else { fallback(); }
+    });
+  }
+})();
+</script>
+</body>
+</html>

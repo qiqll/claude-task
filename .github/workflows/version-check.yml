@@ -1,0 +1,22 @@
+name: version-check
+on:
+  pull_request:
+    paths: ["plugins/task/**"]
+jobs:
+  bump:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Plugin files changed → version must change
+        run: |
+          base="origin/${{ github.base_ref }}"
+          ver() { git show "$1:plugins/task/.claude-plugin/plugin.json" | python3 -c 'import json,sys;print(json.load(sys.stdin)["version"])'; }
+          old=$(ver "$base"); new=$(ver HEAD)
+          echo "base=$old head=$new"
+          if [ "$old" = "$new" ]; then
+            echo "::error file=plugins/task/.claude-plugin/plugin.json::plugins/task changed but version is still $old. Bump it (and CHANGELOG.md) or existing users won't get the update."
+            exit 1
+          fi
+          grep -q "^## $new" CHANGELOG.md || { echo "::error file=CHANGELOG.md::No CHANGELOG entry for $new"; exit 1; }
