@@ -2,6 +2,13 @@
 
 All notable changes to the `task` plugin. Versions follow [semver](https://semver.org/); the version in `plugins/task/.claude-plugin/plugin.json` is what Claude Code uses to detect updates.
 
+## 0.3.10 — 2026-11-18
+
+- `/task:status T-0NN` (T-013): one task's timeline, oldest first — its `run.log` lines (dispatch, result, watchdog), the branch's commits that mention it (dispatcher bookkeeping marked as such, plus hashes listed in `dev-progress.md`), `refs/auto-failed/*`, decisions, rejections and inbox replies, human blockers and archiving, with parent and derived tasks. An unknown ID says so and gives the ID range; no argument keeps the overview.
+- Human metrics (T-014): the pane's metric tiles and `/task:status` add 人工介入 (runs ending in 待决策 / 阻塞, plus rejections), 决策等待 (median from 待决策 to the answer) and 回滚率 (rolled-back runs over finished runs). `—` without data; narrow panes fall back to text pairs. The loop now logs `DECIDED`, `REJECTED` and `ROLLBACK` lines; older logs still read, with the earlier rules.
+- First pass rate (T-015): a rejection counts from its `REJECTED` line, so a redispatched task no longer drops out of the count.
+- Median cycle (T-016): results with a bracketed reason, such as `FAILED（超时）→阻塞`, now end a run.
+
 ## 0.3.9 — 2026-11-18
 
 - The dispatcher doesn't write code: while a loop runs or waits for work, a `tool.call` hook refuses the dispatcher session's Edit / Write / MultiEdit / NotebookEdit and MCP filesystem writes to project files. Still writable: `.claude/backlog.md`, `dev-plan.md`, `dev-progress.md`, `.claude/inbox/`, `.claude/auto/`, `.claude/worktrees/`, `.gitignore`, and anything outside the project. The dispatcher is the session that last ran `/task:loop` (kept in `.claude/auto/dispatcher`); other sessions, workers and subagents are not touched, and a halted, stopped or stale loop guards nothing.
