@@ -4,6 +4,7 @@ import {
   buildSnapshot,
   cellWidth,
   dispatcherForbidden,
+  duration,
   loopStatusOf,
   parseBacklog,
   parseCurrent,
@@ -12,7 +13,9 @@ import {
   parseRunLog,
   parseSession,
   noteClauses,
+  percent,
   resolvePath,
+  runOutcome,
   normalizeStatus,
   splitRow,
   transitions,
@@ -144,6 +147,66 @@ describe('snapshot', () => {
     const d1 = buildSnapshot('/proj', { ...files, backlog: dup }, NOW)
     const d2 = buildSnapshot('/proj', { ...files, backlog: dup.replace('| 想法 |', '| 想法2 |') }, NOW)
     expect(transitions(d1, d2)).toEqual([])
+  })
+
+  test('human metrics from the fixture log: a decision and a rejection, nothing rolled back or answered yet', () => {
+    const m = buildSnapshot('/proj', { backlog: BACKLOG, progress: PROGRESS, current: CURRENT, runLog: RUN_LOG, hasStopFile: false, inbox: 0 }, NOW).metrics
+    // NEEDS_DECISION→待决策 (T-105) + the 打回 redelivery (T-107).
+    expect(m.interventions).toBe(2)
+    // T-105 is still in the 待决策 table: unanswered waits are not counted.
+    expect(m.decisionWaitMs).toBeNull()
+    expect(m.rollbacks).toBe(0)
+    expect(m.rollbackRate).toBe(0)
+  })
+
+  test('human metrics: answered decisions, FAILED runs as rollbacks, a rejection still in 打回; old rates unchanged', () => {
+    const log = `${RUN_LOG}2026-11-15 12:00:00 | T-071 | FAILED（超时）→待开始 | commits 2 | 3h | 衍生 0 | 超时
+2026-11-15 12:30:00 | T-105 | DECIDED | 选 A
+2026-11-15 12:31:00 | T-105 | DISPATCH | nonce=ee
+2026-11-15 12:51:00 | T-105 | BLOCKED→阻塞 | commits 0 | 20m | 衍生 0 | 缺凭据
+2026-11-15 13:00:00 | T-111 | DISPATCH | nonce=ff
+2026-11-15 13:10:00 | T-111 | NEEDS_DECISION→待决策 | commits 0 | 10m | 衍生 0 | 两方案
+2026-11-15 15:10:00 | T-111 | DISPATCH | nonce=gg
+2026-11-15 15:20:00 | T-111 | FAILED→阻塞 | commits 1 | 10m | 衍生 0 | 测试红
+2026-11-15 15:21:00 | T-068 | WATCHDOG | IDLE | 已催促
+`
+    const backlog = BACKLOG.replace('| T-107 | 日期炸弹改相对时间 | 测试 | 待验证 |', '| T-107 | 日期炸弹改相对时间 | 测试 | 打回 |')
+    const base = { backlog: BACKLOG, progress: PROGRESS, runLog: log, hasStopFile: false, inbox: 0 }
+    const m = buildSnapshot('/proj', base, NOW).metrics
+    // Ended runs: DONE, NEEDS_DECISION, DONE（打回重做）, FAILED（超时）, BLOCKED, NEEDS_DECISION, FAILED = 7.
+    expect(m.rollbacks).toBe(2)
+    expect(m.rollbackRate).toBe(2 / 7)
+    // 待决策 ×2 + 阻塞 ×2 + one 打回 redelivery.
+    expect(m.interventions).toBe(5)
+    // T-105: 10:41 → DECIDED 12:30 (109m, the DISPATCH after it does not count again); T-111: 13:10 → next DISPATCH 15:10 (120m).
+    expect(m.decisionWaitMs).toBe(120 * 60 * 1000)
+    // WATCHDOG / DECIDED lines and FAILED runs leave the existing rates as they were.
+    const before = buildSnapshot('/proj', { ...base, runLog: RUN_LOG }, NOW).metrics
+    expect(m.firstPassRate).toBe(before.firstPassRate)
+    expect(m.deliveryRate).toBe(before.deliveryRate)
+    expect(m.delivered).toBe(before.delivered)
+    // Rejected again after its redelivery: the task now in 打回 adds one more.
+    expect(buildSnapshot('/proj', { ...base, backlog }, NOW).metrics.interventions).toBe(6)
+  })
+
+  test('human metrics with no run.log are empty and render as —', () => {
+    const m = buildSnapshot('/proj', { backlog: BACKLOG, progress: PROGRESS, hasStopFile: false, inbox: 0 }, NOW).metrics
+    expect(m).toMatchObject({ interventions: null, decisionWaitMs: null, rollbacks: 0, rollbackRate: null })
+    expect(duration(m.decisionWaitMs)).toBe('—')
+    expect(percent(m.rollbackRate)).toBe('—')
+    // A log with dispatches but no ended run has nothing to count either.
+    const started = buildSnapshot('/proj', { backlog: BACKLOG, runLog: '2026-11-15 10:00:00 | START | max=1\n2026-11-15 10:00:10 | T-071 | DISPATCH | nonce=a\n', hasStopFile: false, inbox: 0 }, NOW).metrics
+    expect(started).toMatchObject({ interventions: null, decisionWaitMs: null, rollbacks: 0, rollbackRate: null })
+  })
+
+  test('runOutcome reads result and state, and only from task lines', () => {
+    const [a, b, c, d] = parseRunLog(
+      '2026-11-15 10:00:00 | T-1 | FAILED（停滞：IDLE）→阻塞 | commits 0\n2026-11-15 10:00:00 | T-2 | DONE→待验证（打回重做） | x\n2026-11-15 10:00:00 | T-3 | DISPATCH | nonce=a\n2026-11-15 10:00:00 | STOP | 池空 → 停',
+    )
+    expect(runOutcome(a!)).toEqual({ result: 'FAILED', state: '阻塞' })
+    expect(runOutcome(b!)).toEqual({ result: 'DONE', state: '待验证（打回重做）' })
+    expect(runOutcome(c!)).toBeNull()
+    expect(runOutcome(d!)).toBeNull()
   })
 })
 

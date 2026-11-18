@@ -337,6 +337,62 @@ export function metricsOf(tasks: Task[], archive: Archive, events: LogEvent[], n
     delivered7d,
     archived7d: archive.dates.filter(d => d >= weekAgo).length,
     medianCycleMs: median(cycles),
+    ...humanMetricsOf(tasks, events),
+  }
+}
+
+/** A task run's end in run.log: `FAILED（超时）→阻塞` → result `FAILED`, state `阻塞`; null for any other line. */
+export function runOutcome(e: LogEvent): { result: string; state: string } | null {
+  if (!/^T-\d+$/.test(e.subject)) return null
+  const m = /^([A-Z_]+)[^→]*→\s*(\S*)/.exec(e.event)
+  return m ? { result: m[1]!, state: m[2]! } : null
+}
+
+/**
+ * What the loop needed from a person, from run.log plus the backlog:
+ * - interventions: runs that ended in 待决策 / 阻塞, plus every rejection (a
+ *   `打回` redelivery, and a task sitting in 打回 now);
+ * - decision wait: median time from a run ending in 待决策 to its answer (the
+ *   task's next `DECIDED` line, or for logs without one its next `DISPATCH`);
+ *   unanswered ones are not counted;
+ * - rollbacks: runs that ended `FAILED`, which the loop resets to their start
+ *   (`refs/auto-failed/*`), over all ended runs.
+ * Each is null while run.log holds no ended run (and, for interventions, no rejection) to count.
+ */
+function humanMetricsOf(
+  tasks: Task[],
+  events: LogEvent[],
+): Pick<Metrics, 'interventions' | 'decisionWaitMs' | 'rollbacks' | 'rollbackRate'> {
+  let runs = 0
+  let rollbacks = 0
+  let interventions = 0
+  const waits: number[] = []
+  const suspended = new Map<string, number>()
+  const delivered = new Set<string>()
+  for (const e of events) {
+    const outcome = runOutcome(e)
+    if (outcome) {
+      runs++
+      if (outcome.result === 'FAILED') rollbacks++
+      if (/^(待决策|阻塞)/.test(outcome.state)) interventions++
+      if (outcome.result === 'DONE') {
+        delivered.add(e.subject)
+        if (/打回/.test(e.event)) interventions++
+      }
+      if (outcome.state.startsWith('待决策')) suspended.set(e.subject, e.at)
+      else suspended.delete(e.subject)
+    } else if ((e.event === 'DECIDED' || e.event === 'DISPATCH') && suspended.has(e.subject)) {
+      waits.push(e.at - suspended.get(e.subject)!)
+      suspended.delete(e.subject)
+    }
+  }
+  // A rejection not yet redone shows only as the task's status.
+  for (const t of tasks) if (t.status === '打回' && delivered.has(t.id)) interventions++
+  return {
+    interventions: runs || interventions ? interventions : null,
+    decisionWaitMs: median(waits),
+    rollbacks,
+    rollbackRate: runs ? rollbacks / runs : null,
   }
 }
 

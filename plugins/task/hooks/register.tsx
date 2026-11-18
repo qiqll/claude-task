@@ -257,6 +257,9 @@ function reportText(snap: Snapshot, agentList: AgentRow[], busy: Busy, now: numb
       `${L.stats.firstPass} ${percent(m.firstPassRate)}`,
       `${L.stats.delivered7d} ${m.delivered7d}`,
       `${L.stats.medianCycle} ${duration(m.medianCycleMs)}`,
+      `${L.stats.interventions} ${m.interventions ?? '—'}`,
+      `${L.stats.decisionWait} ${duration(m.decisionWaitMs)}`,
+      `${L.stats.rollback} ${percent(m.rollbackRate)}`,
       `${L.stats.wip} ${c['进行中'] ?? 0}`,
       `${L.stats.verify} ${c['待验证'] ?? 0}`,
       `${L.stats.archived} ${c.archived}`,
@@ -820,6 +823,9 @@ async function drawPane($: EngineInterface, els: Els, cols: number) {
         <Stat els={els} width={tile} label={L.stats.firstPass} value={percent(m.firstPassRate)} color={m.firstPassRate === null ? undefined : 'success'} />
         <Stat els={els} width={tile} label={L.stats.delivered7d} value={`${m.delivered7d}`} color="claude" />
         <Stat els={els} width={tile} label={L.stats.medianCycle} value={duration(m.medianCycleMs)} />
+        <Stat els={els} width={tile} label={L.stats.interventions} value={`${m.interventions ?? '—'}`} color={m.interventions ? 'warning' : undefined} />
+        <Stat els={els} width={tile} label={L.stats.decisionWait} value={duration(m.decisionWaitMs)} />
+        <Stat els={els} width={tile} label={L.stats.rollback} value={percent(m.rollbackRate)} color={m.rollbackRate ? 'error' : undefined} />
         <Stat els={els} width={tile} label={L.stats.wip} value={`${c['进行中'] ?? 0}`} color={(c['进行中'] ?? 0) > 1 ? 'error' : 'success'} />
         <Stat els={els} width={tile} label={L.stats.verify} value={`${c['待验证'] ?? 0}`} color={c['待验证'] ? 'warning' : undefined} />
         <Stat els={els} width={tile} label={L.stats.archived} value={`${c.archived}`} />

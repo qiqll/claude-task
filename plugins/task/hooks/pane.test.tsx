@@ -433,9 +433,9 @@ test('the pane frames the current task and shows metrics as tiles only where lab
     // The current task sits in an accent-framed card at any width.
     expect(boxes.some(b => b.props.borderStyle === 'round' && b.props.borderColor === 'claude')).toBe(true)
     const tiles = boxes.filter(b => b.props.borderStyle === 'round' && b.props.borderColor === 'subtle')
-    expect(tiles).toHaveLength(tiled ? 8 : 0)
+    expect(tiles).toHaveLength(tiled ? 11 : 0)
     // Every label is drawn whole either way.
-    for (const label of ['完成率', '一次通过', '中位周期', '已归档']) expect(await ui.find({ type: 'Text', text: label })).toBeDefined()
+    for (const label of ['完成率', '一次通过', '中位周期', '已归档', '人工介入', '决策等待', '回滚率']) expect(await ui.find({ type: 'Text', text: label })).toBeDefined()
     // The running task's status is a filled tag with dark text; a status with no colour is a plain tag.
     const tags = await ui.findAll({ type: 'Text', text: /进行中/ })
     expect(tags.some(t => t.props.backgroundColor === 'claude' && t.props.color === 'black')).toBe(true)
@@ -447,6 +447,46 @@ test('the pane frames the current task and shows metrics as tiles only where lab
   const todo = await ui.findAll({ type: 'Text', text: / 待开始 / })
   expect(todo.some(t => t.props.color === 'subtle' && t.props.backgroundColor === undefined)).toBe(true)
   await ui.unmount()
+})
+
+test('intervention, decision-wait and rollback metrics fit the pane at every width, and show — with no run.log', async ($, on) => {
+  const log = `${RUN_LOG}2026-11-15 11:40:00 | T-111 | FAILED（停滞：IDLE out=40m）→待开始 | commits 1 | 7m | 衍生 0 | 停滞
+2026-11-27 23:41:00 | T-105 | DECIDED | 选 A
+`
+  let files: Record<string, string> = { ...FILES, '/proj/.claude/auto/run.log': log }
+  on('session.cwd', () => ({ value: '/proj' }))
+  on('clock.now', () => ({ value: new Date(2026, 10, 28, 0, 0, 0).getTime() }))
+  on('fs.exists', (_$, e) => ({ value: e.path in files }))
+  on('fs.list', () => ({ value: [] }))
+  on('fs.read', (_$, e) => (files[e.path] === undefined ? { deny: 'ENOENT' } : { value: files[e.path]! }))
+  on('ui.open', () => ({ value: { isPlaced: true as const } }))
+  on('ui.status', () => ({ value: undefined }))
+  on('process.run', () => ({ deny: 'not macOS' }))
+  on('env.get', (_$, e) => ({ value: e.name === 'LANG' ? 'zh_CN.UTF-8' : undefined }))
+  on('agent.list', () => ({ value: [] }))
+  await $.command.run(RUN)
+  const labels = ['人工介入', '决策等待', '回滚率']
+  // The longest value a duration takes (`12d 13h`) beside the widest label.
+  const values = ['2', '12d 13h', '25%']
+  for (const cols of [80, 44, 43, 30, 20]) {
+    const ui = await $.ui.mount({ plugin: 'task', surface: 'terminal', component: 'Pane', requestId: 'task-dash', props: { ...PANE_PROPS, bodyColumns: cols } })
+    const boxes = await ui.findAll({ type: 'Box' })
+    for (const [i, label] of labels.entries()) {
+      const stat = boxes.find(b => (b.props.marginRight === 2 || b.props.borderColor === 'subtle') && String(b.text).replace(/\s/g, '') === `${label}${values[i]}`.replace(/\s/g, ''))
+      expect(stat).toBeDefined()
+      // A tile holds label and value each on a line of its own width; a text pair (`label value` plus its 2-cell gap) fits the pane.
+      if (stat!.props.borderColor === 'subtle') {
+        for (const part of [label, values[i]!]) expect(cellWidth(part)).toBeLessThanOrEqual((stat!.props.width as number) - 3)
+      } else expect(cellWidth(`${label} ${values[i]}`) + 2).toBeLessThanOrEqual(cols)
+    }
+    await ui.unmount()
+  }
+  const report = await $.command.run({ ...RUN, args: 'report' })
+  expect(report?.text).toContain('人工介入 2 · 决策等待 12d 13h · 回滚率 25%')
+  files = { ...FILES }
+  delete files['/proj/.claude/auto/run.log']
+  const empty = await $.command.run({ ...RUN, args: 'report' })
+  expect(empty?.text).toContain('人工介入 — · 决策等待 — · 回滚率 —')
 })
 
 test('on a narrow pane a status tag stays one line and the title gives way; no refresh button', async ($, on) => {

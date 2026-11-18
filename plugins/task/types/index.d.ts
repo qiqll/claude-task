@@ -53,6 +53,14 @@ export type Metrics = {
   delivered7d: number
   archived7d: number
   medianCycleMs: number | null
+  /** Runs ended in 待决策 / 阻塞 plus rejections; null with nothing in run.log to count. */
+  interventions: number | null
+  /** Median 待决策 → answer (next `DECIDED`, else next `DISPATCH`) over answered decisions. */
+  decisionWaitMs: number | null
+  /** Runs ended `FAILED` (reset to their start, kept in `refs/auto-failed/*`). */
+  rollbacks: number
+  /** rollbacks / ended runs */
+  rollbackRate: number | null
 }
 
 /** The raw text of the pool's files; `undefined` where a file is missing. */

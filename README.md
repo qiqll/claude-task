@@ -176,6 +176,9 @@ To pin a language, set the task plugin's `language` to `zh` or `en` in `/config`
 | First pass | share of delivered tasks that were never rejected (per task) |
 | 7d delivered | `DONE→` events in run.log over the last 7 days |
 | Median cycle | median time from `DISPATCH` to the result event in run.log |
+| Escalations | runs in run.log that ended in 待决策 / 阻塞, plus rejections (`打回` redeliveries and tasks now in 打回) |
+| Answer wait | median time from a run ending in 待决策 to its answer (the task's next `DECIDED` line, or next `DISPATCH` in older logs); unanswered ones are not counted |
+| Rollbacks | runs that ended `FAILED` (reset to their start, kept as `refs/auto-failed/*`) / all ended runs |
 | Possibly interrupted | the loop is running or waiting but has had no activity for 3 hours, or is more than 3 hours past its time budget |
 
 ## Files
