@@ -96,6 +96,8 @@ function derivedFromOf(note: string): string {
 
 export type Backlog = { tasks: Task[]; decisions: Decision[]; humanBlocks: HumanBlock[] }
 
+export const isOpenHumanBlock = (b: HumanBlock): boolean => !/已解决|已完成|已决策|关闭|取消/.test(b.status)
+
 export function parseBacklog(md: string): Backlog {
   const tasks: Task[] = []
   const decisions: Decision[] = []
@@ -136,7 +138,8 @@ export function parseBacklog(md: string): Backlog {
     } else if (section === 'decision' && /^T-\d+/.test(id)) {
       decisions.push({ task: taskIdIn(id) ?? id, question: cells[1] ?? '', options: cells[2] ?? '', since: cells[3] ?? '' })
     } else if (section === 'human' && /^H-\d+$/.test(id)) {
-      humanBlocks.push({ id, desc: cells[1] ?? '', blocks: cells[2] ?? '', status: cells[3] ?? '' })
+      // 状态取最后一列：行里多写了一列（如日期）时仍能读到状态
+      humanBlocks.push({ id, desc: cells[1] ?? '', blocks: cells[2] ?? '', status: cells.length > 3 ? (cells[cells.length - 1] ?? '') : '' })
     }
   }
   tasks.sort(

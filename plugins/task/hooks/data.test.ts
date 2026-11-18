@@ -5,6 +5,7 @@ import {
   cellWidth,
   dispatcherForbidden,
   duration,
+  isOpenHumanBlock,
   loopStatusOf,
   parseBacklog,
   parseCurrent,
@@ -32,6 +33,21 @@ describe('parsing', () => {
 
   test('splitRow with an unbalanced backtick still splits the row', () => {
     expect(splitRow('| T-1 | 改 `foo 的说明 | 模块 | 待开始 |')).toEqual(['T-1', '改 `foo 的说明', '模块', '待开始'])
+  })
+
+  test('human block status is the last cell, so a row with an extra date column still closes', () => {
+    const md = [
+      '## 人工阻塞事项',
+      '| 编号 | 描述 | 阻塞的任务 | 状态 |',
+      '|------|------|-----------|------|',
+      '| H-005 | 磁盘空间不足 | T-087 | 2026-11-03 | 已完成（需求方 2026-11-18 确认） |',
+      '| H-006 | 采集现场 | T-107 | 2026-11-04 | 已关闭（需求方放开） |',
+      '| H-004 | 自刷是否结算 | T-014 | 已决策 |',
+      '| H-008 | 真实账号走通 | T-188 | 待处理 |',
+    ].join('\n')
+    const blocks = parseBacklog(md).humanBlocks
+    expect(blocks.map(b => b.status)).toEqual(['已完成（需求方 2026-11-18 确认）', '已关闭（需求方放开）', '已决策', '待处理'])
+    expect(blocks.filter(isOpenHumanBlock).map(b => b.id)).toEqual(['H-008'])
   })
 
   test('backlog tasks by priority section, decisions and human blocks', () => {

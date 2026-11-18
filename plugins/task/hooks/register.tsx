@@ -8,6 +8,7 @@ import {
   clauseAcceptance,
   dispatcherForbidden,
   duration,
+  isOpenHumanBlock,
   loopStatusOf,
   noteClauses,
   parseCurrent,
@@ -276,7 +277,7 @@ function reportText(snap: Snapshot, agentList: AgentRow[], busy: Busy, now: numb
     out.push('', `■ ${L.decisions} ${L.decisionsExtra(snap.decisions.length)}`)
     for (const d of snap.decisions) out.push(`  ${d.task} ${d.question}`, `      ${d.options}`)
   }
-  const blocks = snap.humanBlocks.filter(b => !/已解决|已完成|关闭/.test(b.status))
+  const blocks = snap.humanBlocks.filter(isOpenHumanBlock)
   if (blocks.length) {
     out.push('', `■ ${L.humanBlocks}`)
     for (const b of blocks) out.push(`  ${b.id} ${b.desc} → ${b.blocks}`)
@@ -873,12 +874,12 @@ async function drawPane($: EngineInterface, els: Els, cols: number) {
         </Box>
       ) : null}
 
-      {snap.humanBlocks.filter(b => !/已解决|已完成|关闭/.test(b.status)).length ? (
+      {snap.humanBlocks.filter(isOpenHumanBlock).length ? (
         <Box flexDirection="column">
           <Rule els={els} cols={cols} />
           <Heading els={els} title={L.humanBlocks} />
           {snap.humanBlocks
-            .filter(b => !/已解决|已完成|关闭/.test(b.status))
+            .filter(isOpenHumanBlock)
             .map((b, i) => (
               <Box key={`human:${b.id}:${i}`}>
                 <Text wrap="wrap">
