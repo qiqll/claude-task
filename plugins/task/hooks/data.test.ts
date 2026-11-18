@@ -44,10 +44,15 @@ describe('parsing', () => {
       '| H-006 | 采集现场 | T-107 | 2026-11-04 | 已关闭（需求方放开） |',
       '| H-004 | 自刷是否结算 | T-014 | 已决策 |',
       '| H-008 | 真实账号走通 | T-188 | 待处理 |',
+      '| H-009 | 行尾多一格 | T-1 | 已完成 | |',
+      '| H-010 | 日期在状态后 | T-2 | 已关闭 | 2026-11-03 |',
+      '| H-011 | 说明里提到已完成 | T-3 | 待处理（采购已完成，待安装） |',
     ].join('\n')
     const blocks = parseBacklog(md).humanBlocks
-    expect(blocks.map(b => b.status)).toEqual(['已完成（需求方 2026-11-18 确认）', '已关闭（需求方放开）', '已决策', '待处理'])
-    expect(blocks.filter(isOpenHumanBlock).map(b => b.id)).toEqual(['H-008'])
+    expect(blocks.map(b => b.status)).toEqual([
+      '已完成（需求方 2026-11-18 确认）', '已关闭（需求方放开）', '已决策', '待处理', '已完成', '已关闭', '待处理（采购已完成，待安装）',
+    ])
+    expect(blocks.filter(isOpenHumanBlock).map(b => b.id)).toEqual(['H-008', 'H-011'])
   })
 
   test('backlog tasks by priority section, decisions and human blocks', () => {

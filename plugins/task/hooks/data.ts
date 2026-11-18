@@ -96,7 +96,9 @@ function derivedFromOf(note: string): string {
 
 export type Backlog = { tasks: Task[]; decisions: Decision[]; humanBlocks: HumanBlock[] }
 
-export const isOpenHumanBlock = (b: HumanBlock): boolean => !/已解决|已完成|已决策|关闭|取消/.test(b.status)
+const HUMAN_STATUS = /^`?(已|待|进行|本机|关闭|取消)/
+// 只看状态开头：「待处理（部分已完成）」仍是阻塞
+export const isOpenHumanBlock = (b: HumanBlock): boolean => !/^`?(已解决|已完成|已决策|已关闭|已取消|关闭|取消)/.test(b.status.trim())
 
 export function parseBacklog(md: string): Backlog {
   const tasks: Task[] = []
@@ -138,8 +140,10 @@ export function parseBacklog(md: string): Backlog {
     } else if (section === 'decision' && /^T-\d+/.test(id)) {
       decisions.push({ task: taskIdIn(id) ?? id, question: cells[1] ?? '', options: cells[2] ?? '', since: cells[3] ?? '' })
     } else if (section === 'human' && /^H-\d+$/.test(id)) {
-      // 状态取最后一列：行里多写了一列（如日期）时仍能读到状态
-      humanBlocks.push({ id, desc: cells[1] ?? '', blocks: cells[2] ?? '', status: cells.length > 3 ? (cells[cells.length - 1] ?? '') : '' })
+      // 第 4 列起找状态：行里多写了日期 / 备注列、或行尾多一个空格子时仍能读到状态
+      const tail = cells.slice(3).filter(c => c && c !== '—')
+      const status = tail.find(c => HUMAN_STATUS.test(c)) ?? tail.at(-1) ?? ''
+      humanBlocks.push({ id, desc: cells[1] ?? '', blocks: cells[2] ?? '', status })
     }
   }
   tasks.sort(
