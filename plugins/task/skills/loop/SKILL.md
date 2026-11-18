@@ -9,7 +9,9 @@ argument-hint: "[max=N 最多任务数，默认 10] [hours=N 最长时长，默�
 
 你是调度员，运行在需求方开着的主会话里。**你自己不写业务代码、不读大段 diff**，只做五件事：读状态、派 worker、验收、写状态、跟需求方说话。所有状态落在文件里，会话随时可以断，一句「继续」就能从文件恢复。
 
-`$SK` = `${CLAUDE_PLUGIN_ROOT}/skills/loop`（含 `verify_tests.sh`、`check_test_weakening.sh`、`worker_progress.sh`）。
+**插件钩子兜底**：循环运行（`run.log` 最后是 `START` 且未停机）时，主会话对项目内文件的 Edit / Write / NotebookEdit 会被拒绝，只放行 `.claude/backlog.md`、`dev-plan.md`、`dev-progress.md`、`.claude/inbox/`、`.claude/auto/`、`.gitignore`（项目外的文件不管）。被拒就按提示把活录成任务交给 worker，**不要改用 Bash 绕过**；需求方坚持要你立刻手改时，先请需求方说「立刻停」（`phase=halted` 后钩子放行）。worker 和其他子代理不受限。
+
+`$SK` = `${CLAUDE_PLUGIN_ROOT}/skills/loop`（含 `verify_tests.sh`、`check_test_weakening.sh`、`worker_progress.sh`、`notify.sh`）。
 
 | 文件 | 谁写 | 作用 |
 |------|------|------|
@@ -18,6 +20,7 @@ argument-hint: "[max=N 最多任务数，默认 10] [hours=N 最长时长，默�
 | `.claude/auto/current` | 调度员 | 当前派发的状态机，`key=value` 每行一个（见下） |
 | `.claude/auto/run.log` | 调度员 | 每任务一行运行流水 |
 | `.claude/auto/STOP` | 需求方 / 调度员 | 存在 = 当前任务做完后停机 |
+| `.claude/auto/notified` | `notify.sh` | 已发通知的去重键（不用手动维护） |
 
 **`current` 字段**：`task=T-0NN` `nonce=<8位随机hex>` `phase=<见下>` `start_sha=` `dirty=<开工时 git status --porcelain 的路径，逗号分隔>` `started=<epoch>` `worker=worker-T-0NN` `output=<output 文件路径>` `nudged=<看门狗催促时间 epoch，未催促则无此行>` `watch_ok=<看门狗判定正常的时间 epoch，同上>` `run_started=<本次 /task:loop 启动 epoch>` `max=` `hours=` `done=<本次已交付数>` `noprog=<连续无进展数>`。
 没有 current 时，`run_started/max/hours/done/noprog` 记在 `.claude/auto/session`（同格式），派发时拷进 current。
@@ -58,11 +61,11 @@ argument-hint: "[max=N 最多任务数，默认 10] [hours=N 最长时长，默�
      - 在「待决策」表 → 答复写进备注「需求方决策（日期）：…」，删表行，状态改 `待开始`。
      - 状态是 `待验证` 且答复是「通过/OK」类 → 按 `${CLAUDE_PLUGIN_ROOT}/skills/next/SKILL.md`「需求方确认后的收尾」归档；是「打回」类 → 状态 `打回`，备注追加问题，排队重做（派发时带上打回意见）。
      - 状态是 `阻塞` → 答复写进备注，若答复表明阻塞已解除则改 `待开始`。
-     - 找不到 / 无法判断 → 原文挂进「待决策」表问需求方，不猜。
+     - 找不到 / 无法判断 → 原文挂进「待决策」表问需求方，不猜（按「通知需求方」发通知，去重键用 inbox 文件名）。
    - 处理完的文件移到 `.claude/inbox/.merged/`。有改动就 commit `docs(task): 合并投递 <ID 列表>`。
 4. **挑任务**，规则同 `${CLAUDE_PLUGIN_ROOT}/skills/next/SKILL.md` Step 1（Read 它），额外：
    - 跳过 `待决策` / `阻塞` / `待验证`，以及备注含「AI 衍生 P3，只录不做」或「自动失败×2」的。
-   - `dev-plan.md` 当前批次里标「需需求方定 / 先不排」的任务 → 不派发，挪进「待决策」表（问题从 dev-plan 理由里抄），然后继续挑。
+   - `dev-plan.md` 当前批次里标「需需求方定 / 先不排」的任务 → 不派发，挪进「待决策」表（问题从 dev-plan 理由里抄），按「通知需求方」发通知（去重键 `T-0NN:待决策:plan`），然后继续挑。
    - P0 永远最先。无可做任务 → 转 D。
 5. **开工登记**：任务状态改 `进行中`；`dev-plan.md`「进行中任务」填 ID / 开工时间 / 阶段「自动 worker 实施中」；commit `docs(task): T-0NN 自动开工`。**此后**取 `start_sha=$(git rev-parse HEAD)`、`dirty`、`nonce=$(openssl rand -hex 4)`。
 6. **派发 worker**：Agent 工具，`subagent_type: general-purpose`，`name: worker-T-0NN`，后台运行。prompt 只给：
@@ -120,7 +123,8 @@ argument-hint: "[max=N 最多任务数，默认 10] [hours=N 最长时长，默�
 2. 改 backlog（结论 + 衍生）、`dev-plan.md` 清空「进行中任务」并刷新「当前批次」；「最后更新」只写日期 + 本任务一句话（历史在 `run.log` / `dev-progress.md`）。commit `docs(task): T-0NN 自动交付<结果>`（只 add 这两个文件）。
 3. 更新 session：DONE→待验证 时 `done+1, noprog=0`；无进展类 `noprog+1`；其他不变。删 current。`run.log` 追加 `<时间> | T-0NN | <RESULT>→<最终状态> | commits <n> | <耗时> | 衍生 <n> | <一句话>`。
 4. 给需求方 3–6 行简报：结果、改了什么、请怎么验证（来自 `BRIEF`）；进了待决策的把问题和选项直接贴出来。
-5. 回到 B（同一回合内继续）。
+5. 最终状态是 `待决策` / `待验证` / `阻塞`，或本轮往「待决策」表加了行（遗留文件、测试改动需确认等）→ 按「通知需求方」发**一条**通知（多件事合并成一句），去重键 `T-0NN:<最终状态>:<nonce>`。
+6. 回到 B（同一回合内继续）。
 
 ## D. 空闲
 
@@ -128,7 +132,7 @@ argument-hint: "[max=N 最多任务数，默认 10] [hours=N 最长时长，默�
 
 ## E. 停机
 
-不再派发。CronDelete 心跳；`run.log` 追加 `<时间> | STOP | <原因>`；输出总结：本次交付列表、**待决策清单（问题 + 选项）**、阻塞清单、待验证数、`refs/auto-failed/*` 留存。STOP 文件保留到下次 `/task:loop`。
+不再派发。CronDelete 心跳；`run.log` 追加 `<时间> | STOP | <原因>`；按「通知需求方」发通知（去重键 `STOP:<run_started>`，消息如「循环已停机：<原因>；待决策 N · 待验证 N」）；输出总结：本次交付列表、**待决策清单（问题 + 选项）**、阻塞清单、待验证数、`refs/auto-failed/*` 留存。STOP 文件保留到下次 `/task:loop`。
 
 ## 心跳（`/task:loop tick`）
 
@@ -162,6 +166,20 @@ argument-hint: "[max=N 最多任务数，默认 10] [hours=N 最长时长，默�
 3. 已有 `nudged`，距今 ≥ 40 分钟仍是 `IDLE` / `SPIN` → TaskStop 该 worker，按 `FAILED（停滞：<脚本输出>）` 进 C。距今不足 40 分钟 → 静默。
 4. 脚本恢复 `OK` 时删掉 `nudged` / `watch_ok` 行，下次停滞重新计数。
 
+## 通知需求方
+
+循环在跑时你很少停下来等人，需求方不盯着会话就不知道有事等着处理。遇到上文标注的节点，跑：
+
+```bash
+bash $SK/notify.sh "<项目根绝对路径>" "<去重键>" "<消息>"
+```
+
+- 消息 ≤ 100 字：`T-0NN <状态>：<一句话>` + 回复方式。例：「T-105 待决策：超限按扩列还是拒绝？回复 qtask -d T-105 "选 A"」「T-107 待验证：日期改相对时间，确认回复 qtask -d T-107 通过」「T-096 阻塞：需你核对生产库三列（H-022）」。
+- 消息只写任务 ID、状态、你自己概括的一句话；不要原样贴 worker 报告或需求方投递的大段文字。
+- 输出 `SENT` / `SKIP` / `FAIL` 都照常往下走，不重试；通知失败不影响循环。
+- **不要**为派发、验收中、空闲发通知：派发后你会结束回合，宿主自己的空闲提醒已经够了。
+- 需求方可设 `TASK_NOTIFY=off` 关闭，或 `TASK_NOTIFY_CMD` 换渠道（见插件 README）。
+
 ## 需求方在会话里说话时
 
 worker 在后台跑，你随时能接话。**不要因为需求方说话就自己动手写代码。**
@@ -183,6 +201,7 @@ worker 运行期间你**只写** `.claude/inbox/` 与 `.claude/auto/`，不改 b
 - 一次只跑一个 worker（共享工作区，并行会互相踩）。
 - 不发明需求：新任务只来自需求方投递和 worker 的 `DERIVED`（受 C3 上限约束）。
 - 主会话上下文只装报告和脚本尾部输出；需要看代码细节时派 agent 去看。
+- 循环运行期间主会话改不了项目代码（插件钩子拦截，见开头）；这是设计，不是故障。
 
 ---
 

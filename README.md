@@ -36,6 +36,7 @@ Dump requirements into a backlog and walk away. A dispatcher hands each task to 
 
 - **Doesn't trust the worker's word.** A task counts as done only after the dispatcher re-runs the tests itself.
 - **Catches weakened tests.** Deleted cases, new skips and fewer assertions are detected automatically.
+- **The dispatcher doesn't write code.** While a loop runs, a plugin hook refuses the main session's edits to project files (the pool and run directories excepted), so the work goes to a worker and acceptance never means grading its own homework.
 - **Notices a stuck worker.** The heartbeat checks whether the worker is still writing output and still changing the repo. A worker that stalls is nudged once, then stopped and handled as a failure, instead of waiting for the 3-hour timeout.
 - **Asks first on high-risk choices.** Schema/migrations, auth/crypto, billing, data deletion, public APIs, deployment and dependencies: if there's more than one way to do it, it stops and lets you decide.
 - **Rolls back failures.** Failed changes are reverted and kept under `refs/auto-failed/*` for review. A task that fails twice is marked blocked.
@@ -111,6 +112,15 @@ qtask -h
 ```
 
 You can skip it: saying "add a task: …" or "T-0NN pick A" in the dispatcher session does the same thing.
+
+### Notifications
+
+The loop sends a system notification when a task lands in "decision", "to verify" or "blocked", and when the loop stops: once per event, at most 100 characters, with the `qtask` command to reply. Moments that need nothing from you, such as a dispatch or going idle, stay quiet. By default it uses `osascript` on macOS and `notify-send` on Linux; set these under `env` in `~/.claude/settings.json` to change that:
+
+| Variable | Effect |
+|----------|--------|
+| `TASK_NOTIFY=off` | No notifications |
+| `TASK_NOTIFY_CMD="<command>"` | Another channel: the command gets the title and message appended as two arguments (your own ntfy / Slack script, say) |
 
 ## Pane and status line
 
