@@ -114,10 +114,12 @@ describe('snapshot', () => {
     const cycle = (log: string) => buildSnapshot('/proj', { backlog: BACKLOG, runLog: log, hasStopFile: false, inbox: 0 }, NOW).metrics.medianCycleMs
     // T-071: 11:33 → FAILED（超时）→阻塞 at 14:33 (180m); cycles 10m, 30m, 50m, 180m → upper median 50m.
     expect(cycle(`${RUN_LOG}2026-11-15 14:33:00 | T-071 | FAILED（超时）→阻塞 | commits 2 | 3h | 衍生 0 | 超时\n`)).toBe(50 * 60 * 1000)
-    // The run ended there: a later bracketed FAILED with no DISPATCH before it adds nothing.
+    // The first bracketed FAILED ends the run (10m); a later one with no DISPATCH before it adds nothing (not 170m).
     expect(
-      cycle(`${RUN_LOG}2026-11-15 11:43:00 | T-071 | FAILED（停滞：IDLE）→待开始 | commits 0\n2026-11-15 14:33:00 | T-071 | FAILED（超时）→阻塞 | commits 0\n`),
-    ).toBe(30 * 60 * 1000)
+      cycle(
+        '2026-11-15 10:00:00 | T-001 | DISPATCH | nonce=a\n2026-11-15 10:10:00 | T-001 | FAILED（停滞：IDLE）→待开始 | commits 0\n2026-11-15 13:00:00 | T-001 | FAILED（超时）→阻塞 | commits 0\n',
+      ),
+    ).toBe(10 * 60 * 1000)
   })
 
   test('loop status', () => {
