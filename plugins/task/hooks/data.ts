@@ -290,8 +290,6 @@ function median(values: number[]): number | null {
   return sorted[Math.floor(sorted.length / 2)] ?? null
 }
 
-/** `DONE→待验证`, `NEEDS_DECISION→待决策`…; not free text that happens to hold an arrow. */
-const isOutcome = (e: LogEvent) => /^[A-Z_]+→/.test(e.event)
 const isDelivered = (e: LogEvent) => /^DONE→/.test(e.event)
 
 export function metricsOf(tasks: Task[], archive: Archive, events: LogEvent[], now: number): Metrics {
@@ -325,7 +323,7 @@ export function metricsOf(tasks: Task[], archive: Archive, events: LogEvent[], n
   const dispatched = new Map<string, number>()
   for (const e of events) {
     if (e.event === 'DISPATCH') dispatched.set(e.subject, e.at)
-    else if (isOutcome(e) && dispatched.has(e.subject)) {
+    else if (runOutcome(e) && dispatched.has(e.subject)) {
       cycles.push(e.at - dispatched.get(e.subject)!)
       dispatched.delete(e.subject)
     }
