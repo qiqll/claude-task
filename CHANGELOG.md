@@ -2,6 +2,11 @@
 
 All notable changes to the `task` plugin. Versions follow [semver](https://semver.org/); the version in `plugins/task/.claude-plugin/plugin.json` is what Claude Code uses to detect updates.
 
+## 0.3.9 — 2026-11-18
+
+- The dispatcher doesn't write code: while a loop runs or waits for work, a `tool.call` hook refuses the dispatcher session's Edit / Write / MultiEdit / NotebookEdit and MCP filesystem writes to project files. Still writable: `.claude/backlog.md`, `dev-plan.md`, `dev-progress.md`, `.claude/inbox/`, `.claude/auto/`, `.claude/worktrees/`, `.gitignore`, and anything outside the project. The dispatcher is the session that last ran `/task:loop` (kept in `.claude/auto/dispatcher`); other sessions, workers and subagents are not touched, and a halted, stopped or stale loop guards nothing.
+- Notifications: new `skills/loop/notify.sh`. The loop sends one system notification when a task lands in 待决策 / 待验证 / 阻塞 and when it stops, at most 100 characters with the `qtask` reply command, deduplicated per event; dispatches and idle stay quiet. `osascript` on macOS, `notify-send` on Linux; `TASK_NOTIFY=off` turns it off, `TASK_NOTIFY_CMD` picks another channel (10-second limit).
+
 ## 0.3.8 — 2026-11-17
 
 - Loop watchdog: each heartbeat runs `worker_progress.sh`, which reads file timestamps only. `IDLE` means the worker's output has not grown for 30 minutes. `SPIN` means output is still growing, but the repo has had no new commit and no file change for 60 minutes. On either, the dispatcher reads the worker's last 15 actions (`worker_progress.sh --recent`, tool names plus the start of inputs and results, parsed from the transcript): a legitimate long step (a test suite, a review) is left alone for an hour; repetition or drift gets one `SendMessage` nudge; still stalled 40 minutes after the nudge, the worker is stopped and handled as `FAILED（停滞）`. Each check is logged as a `WATCHDOG` line in `run.log`. The 3-hour timeout stays as the backstop. Not applied in `review_pending`, where the worker is waiting on purpose.
