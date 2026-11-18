@@ -94,7 +94,7 @@ Then update the task plugin from the `/plugin` menu (or run `claude plugin updat
 | `/task:add <request>` | Turns a plain-language request into a ticket (ID, priority, acceptance criteria). Records only; doesn't implement |
 | `/task:next [T-NNN]` | Manual single step: implements one task → review gate → commit → "to verify", then stops |
 | `/task:loop [max=10] [hours=8]` | Autonomous loop: the main session only dispatches; each task goes to a background worker (`/task:auto`) and is accepted after the tests are re-run |
-| `/task:status` | Overview: counts per priority, decisions, blockers, suggested next step |
+| `/task:status [T-0NN]` | Overview: counts per priority, decisions, blockers, suggested next step. With an ID: that task's timeline (dispatch/delivery log lines, commits, derived tasks, `refs/auto-failed/*`, decision answers) |
 | `/task-dash [report [all]\|inline\|off\|on]` | Opens the side pane in fullscreen layout; otherwise prints a full snapshot into the conversation. `report all` lists every task; `off`/`on` hides or restores the status line |
 | `qtask "…"` | Sends a task or decision to a running loop from your own terminal (separate install, see below) |
 
