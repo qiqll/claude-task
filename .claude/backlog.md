@@ -55,7 +55,7 @@
 | ID | 任务 | 模块 | 状态 | 依赖 | 备注 |
 |----|------|------|------|------|------|
 | T-013 | 新增链式召回：`/task:status T-0NN` 按时间线串起该任务的 run.log 记录、commit、衍生任务、`refs/auto-failed/*`、待决策答复 | task/技能 | 待验证 | — | 验收：对已归档任务（如 T-011）执行 `/task:status T-011` 输出含 DISPATCH/DONE 时间、对应 commit 哈希、衍生任务（无则写无）的按时间排序时间线；不带参数时行为与现在一致；查不存在的 ID 给出明确提示（AI 拟，可改）。新模块名 task/技能；来源：Super-agent 增强候选；自动交付（2026-11-18）：commits 6d36a01 0ff7724；验收：claude plugin test plugins/task 48/48 PASS（基线比对），测试无改弱；review M×4 全修、L 修 5；假设：技能内命令实现不加脚本，仅日期的事件排同日带时刻事件之后，docs(task) 提交标「记账」，未知参数先提示用法再出全局视图 |
-| T-014 | 补度量：从 run.log/backlog 统计人工介入次数、决策等待时长（挂起→答复）、回滚率（`refs/auto-failed/*` 与 git reset 回退），在 `/task:status` 与面板指标区展示 | task/数据 | 待开始 | — | 验收：`plugins/task/hooks/data.test.ts` 新增用例覆盖三项指标计算（含无数据时为空/—）且全量 vitest 通过；面板窄宽下指标不溢出；已有一次通过率/交付率口径不变（AI 拟，可改）。来源：Super-agent 增强候选 |
+| T-014 | 补度量：从 run.log/backlog 统计人工介入次数、决策等待时长（挂起→答复）、回滚率（`refs/auto-failed/*` 与 git reset 回退），在 `/task:status` 与面板指标区展示 | task/数据 | 进行中 | — | 验收：`plugins/task/hooks/data.test.ts` 新增用例覆盖三项指标计算（含无数据时为空/—）且全量 vitest 通过；面板窄宽下指标不溢出；已有一次通过率/交付率口径不变（AI 拟，可改）。来源：Super-agent 增强候选 |
 
 ## P3 — 想法池
 
