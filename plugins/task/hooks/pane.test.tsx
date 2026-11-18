@@ -786,3 +786,47 @@ test('while its loop runs the main session may write the pool but not the code; 
   await edit('/proj/src/b.py')
   expect(ran.slice(-2)).toEqual(['Edit /proj/src/a.py', 'Edit /proj/src/b.py'])
 })
+
+test('the guard covers MCP file tools, follows the session that ran /task:loop, and stands down on a waiting loop with STOP', async ($, on) => {
+  let files: Record<string, string> = { ...FILES, '/proj/.claude/auto/dispatcher': 'other-session\n' }
+  const ran: string[] = []
+  const written: Record<string, string> = {}
+  on('session.cwd', () => ({ value: '/proj' }))
+  on('session.id', () => ({ value: 'me' }))
+  on('clock.now', () => ({ value: new Date(2026, 10, 15, 12, 0, 0).getTime() }))
+  on('fs.exists', (_$, e) => ({ value: e.path in files || e.path === '/proj/.claude/auto' }))
+  on('fs.list', () => ({ value: [] }))
+  on('fs.read', (_$, e) => (files[e.path] === undefined ? { deny: 'ENOENT' } : { value: files[e.path]! }))
+  on('fs.write', (_$, e) => {
+    written[e.path] = e.text
+    files = { ...files, [e.path]: e.text }
+    return { value: undefined }
+  })
+  on('process.run', () => ({ deny: 'not macOS' }))
+  on('env.get', () => ({ value: undefined }))
+  on('ui.status', () => ({ value: undefined }))
+  on('turn.start', (_$, e) => ({ turnId: e.turnId }))
+  on('tool.call', (_$, e) => {
+    ran.push(e.tool)
+    return { result: {} as never }
+  })
+  const edit = () => $.tool.call({ tool: 'Edit', file_path: '/proj/src/a.py', old_string: 'a', new_string: 'b' } as never)
+
+  // Another session runs the loop: this one is not its dispatcher.
+  expect(await edit()).not.toHaveProperty('deny')
+  // A plain prompt claims nothing; /task:loop makes this session the dispatcher.
+  await $.turn.start({ text: '帮我看看', turnId: 't1' })
+  expect(written).toEqual({})
+  await $.turn.start({ text: '/task:loop tick', turnId: 't2' })
+  expect(written).toEqual({ '/proj/.claude/auto/dispatcher': 'me\n' })
+  expect(await edit()).toHaveProperty('deny')
+  const mcp = await $.tool.call({ tool: 'mcp__magpie__mcp__filesystem__move_file', source: '/tmp/x', destination: '/proj/src/x.py' } as never)
+  expect(mcp).toMatchObject({ deny: expect.stringContaining('src/x.py') })
+  expect(await $.tool.call({ tool: 'Write', file_path: '/proj/.claude/worktrees/w/a.py', content: '' } as never)).not.toHaveProperty('deny')
+
+  // Waiting between tasks with STOP asked for: nothing to guard.
+  const { ['/proj/.claude/auto/current']: _, ...noCurrent } = files
+  files = { ...noCurrent, '/proj/.claude/auto/STOP': '' }
+  expect(await edit()).not.toHaveProperty('deny')
+  expect(ran).toEqual(['Edit', 'Write', 'Edit'])
+})

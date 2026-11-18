@@ -377,8 +377,8 @@ export function resolvePath(path: string, cwd: string): string {
   return `/${parts.join('/')}`
 }
 
-/** What the dispatcher keeps writing while its loop runs: the pool files, the loop's run dirs, `.gitignore`. */
-const DISPATCHER_WRITABLE = [/^\.claude\/(backlog|dev-plan|dev-progress)\.md$/, /^\.claude\/(inbox|auto)\//, /^\.gitignore$/]
+/** What the dispatcher keeps writing while its loop runs: the pool files, the loop's run dirs, `.gitignore`, and worktrees nested under `.claude/worktrees/` (another checkout). */
+const DISPATCHER_WRITABLE = [/^\.claude\/(backlog|dev-plan|dev-progress)\.md$/, /^\.claude\/(inbox|auto|worktrees)\//, /^\.gitignore$/]
 
 /**
  * The project-relative path the dispatcher may not edit while its loop runs, or

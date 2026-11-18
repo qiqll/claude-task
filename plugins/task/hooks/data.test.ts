@@ -199,6 +199,8 @@ describe('dispatcher guard', () => {
     expect(dispatcherForbidden('/proj', '/proj/.claude/settings.json', '/proj')).toBe('.claude/settings.json')
     expect(dispatcherForbidden('/proj', '/proj/.claude/auto/../../src/x.ts', '/proj')).toBe('src/x.ts')
     expect(dispatcherForbidden('/proj', '/proj/src/x/../../.claude/inbox/2.md', '/proj')).toBeNull()
+    // A worktree nested under .claude/worktrees/ is another checkout.
+    expect(dispatcherForbidden('/proj', '/proj/.claude/worktrees/fix/src/a.ts', '/proj')).toBeNull()
   })
 
   test('files outside the project are not the guard\'s business', () => {

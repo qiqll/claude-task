@@ -928,14 +928,43 @@ async function drawPane($: EngineInterface, els: Els, cols: number) {
 
 // ---------------------------------------------------------------- dispatcher guard
 
-/** The file-editing tools, by the argument naming the file. Bash goes unchecked: the loop's commit-attribution check covers it. */
-const EDIT_PATH_ARG: Record<string, string> = { Edit: 'file_path', Write: 'file_path', MultiEdit: 'file_path', NotebookEdit: 'notebook_path' }
+const BUILTIN_EDIT_ARGS: Record<string, string[]> = {
+  Edit: ['file_path'],
+  Write: ['file_path'],
+  MultiEdit: ['file_path'],
+  NotebookEdit: ['notebook_path'],
+}
+const MCP_EDIT = /^mcp__.*filesystem__(write_file|edit_file|move_file|create_directory)$/
 
 /**
- * Why the main session may not edit `path` now, or null when it may. While its
- * loop runs (or waits for work) the main session is the dispatcher, and the
- * project's code is the worker's: a prompt alone does not keep a dispatcher
- * from doing the work itself. A halted, stopped or stale loop guards nothing.
+ * The file-writing tools, by the arguments naming a file: the built-ins and an
+ * MCP filesystem server's. Bash goes unchecked: the loop's commit-attribution
+ * check covers it.
+ */
+function editedPaths(e: { tool: string }): string[] {
+  const keys = BUILTIN_EDIT_ARGS[e.tool] ?? (MCP_EDIT.test(e.tool) ? ['path', 'source', 'destination'] : [])
+  const input = e as unknown as Record<string, unknown>
+  return keys.map(k => input[k]).filter((v): v is string => typeof v === 'string')
+}
+
+/** Only the last stretch of run.log decides the loop's state; the log only grows. */
+const RUN_LOG_TAIL = 65_536
+
+/** A `/task:loop` turn (start, resume or tick) names this session the dispatcher, so other sessions go unguarded. */
+async function claimDispatcher($: EngineInterface, text: string) {
+  if (!/^\s*\/task:loop(\s|$)/.test(text)) return
+  const root = await findRoot($, await $.clock.now())
+  if (!root || !(await $.fs.exists(`${root}/.claude/auto`))) return
+  const id = await $.session.id()
+  if ((await readText($, `${root}/.claude/auto/dispatcher`))?.trim() !== id) await $.fs.write(`${root}/.claude/auto/dispatcher`, `${id}\n`)
+}
+
+/**
+ * Why this session may not write `path` now, or null when it may. While its
+ * loop runs (or waits for work) the dispatcher session's project code is the
+ * worker's: a prompt alone does not keep a dispatcher from doing the work
+ * itself. A halted, stopped or stale loop guards nothing, nor does another
+ * session's loop (one started before the dispatcher was recorded counts as ours).
  */
 async function dispatcherDenial($: EngineInterface, path: string): Promise<string | null> {
   const now = await $.clock.now()
@@ -944,14 +973,17 @@ async function dispatcherDenial($: EngineInterface, path: string): Promise<strin
   const rel = dispatcherForbidden(root, path, await $.session.cwd())
   if (rel === null) return null
   const base = `${root}/.claude/auto`
-  const [current, session, runLog, hasStopFile] = await Promise.all([
+  const [current, session, runLog, hasStopFile, dispatcher] = await Promise.all([
     readText($, `${base}/current`),
     readText($, `${base}/session`),
     readText($, `${base}/run.log`),
     $.fs.exists(`${base}/STOP`).catch(() => false),
+    readText($, `${base}/dispatcher`),
   ])
-  const loop = loopStatusOf(true, parseCurrent(current), parseSession(current, session), parseRunLog(runLog), hasStopFile, now)
+  const tail = runLog && runLog.length > RUN_LOG_TAIL ? runLog.slice(runLog.indexOf('\n', runLog.length - RUN_LOG_TAIL) + 1) : runLog
+  const loop = loopStatusOf(true, parseCurrent(current), parseSession(current, session), parseRunLog(tail), hasStopFile, now)
   if (loop !== 'running' && loop !== 'waiting') return null
+  if (dispatcher?.trim() && dispatcher.trim() !== (await $.session.id())) return null
   await currentStrings($)
   return L.dispatcherDeny(rel)
 }
@@ -1003,6 +1035,7 @@ export const register: Register = (on, options) => {
 
   on('turn.start', async ($, e, next) => {
     ensureTicking($)
+    if (!(e as { agentId?: string }).agentId) await claimDispatcher($, e.text).catch(() => undefined)
     await turnStarted($, e.turnId)
     return next(e)
   }).catch(($, e, next) => next(e))
@@ -1018,9 +1051,7 @@ export const register: Register = (on, options) => {
 
   // Subagents (the worker, reviewers) carry agentId and edit freely; only the main loop is checked.
   on('tool.call', async ($, e, next) => {
-    const arg = EDIT_PATH_ARG[e.tool]
-    const path = arg && !e.agentId ? (e as unknown as Record<string, unknown>)[arg] : undefined
-    if (typeof path === 'string') {
+    for (const path of e.agentId ? [] : editedPaths(e)) {
       const deny = await dispatcherDenial($, path).catch(() => null)
       if (deny) return { deny }
     }

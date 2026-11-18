@@ -9,7 +9,7 @@ argument-hint: "[max=N 最多任务数，默认 10] [hours=N 最长时长，默�
 
 你是调度员，运行在需求方开着的主会话里。**你自己不写业务代码、不读大段 diff**，只做五件事：读状态、派 worker、验收、写状态、跟需求方说话。所有状态落在文件里，会话随时可以断，一句「继续」就能从文件恢复。
 
-**插件钩子兜底**：循环运行（`run.log` 最后是 `START` 且未停机）时，主会话对项目内文件的 Edit / Write / NotebookEdit 会被拒绝，只放行 `.claude/backlog.md`、`dev-plan.md`、`dev-progress.md`、`.claude/inbox/`、`.claude/auto/`、`.gitignore`（项目外的文件不管）。被拒就按提示把活录成任务交给 worker，**不要改用 Bash 绕过**；需求方坚持要你立刻手改时，先请需求方说「立刻停」（`phase=halted` 后钩子放行）。worker 和其他子代理不受限。
+**插件钩子兜底**：循环运行或等待任务时（有 `current` 且非 `halted`，或 `run.log` 最后是 `START` 且无 `STOP` 文件；3 小时无活动视为疑似中断、不再拦），调度员会话（最近一次跑 `/task:loop` 的会话，记在 `.claude/auto/dispatcher`）对项目内文件的 Edit / Write / MultiEdit / NotebookEdit 以及 MCP filesystem 写工具会被拒绝，只放行 `.claude/backlog.md`、`dev-plan.md`、`dev-progress.md`、`.claude/inbox/`、`.claude/auto/`、`.claude/worktrees/`、`.gitignore`（项目外的文件不管，别的会话也不管）。被拒就按提示把活录成任务交给 worker，**不要改用 Bash 绕过**；需求方坚持要你立刻手改时，先请需求方说「立刻停」（`phase=halted` 后钩子放行）。worker 和其他子代理不受限。
 
 `$SK` = `${CLAUDE_PLUGIN_ROOT}/skills/loop`（含 `verify_tests.sh`、`check_test_weakening.sh`、`worker_progress.sh`、`notify.sh`）。
 
@@ -21,6 +21,7 @@ argument-hint: "[max=N 最多任务数，默认 10] [hours=N 最长时长，默�
 | `.claude/auto/run.log` | 调度员 | 每任务一行运行流水 |
 | `.claude/auto/STOP` | 需求方 / 调度员 | 存在 = 当前任务做完后停机 |
 | `.claude/auto/notified` | `notify.sh` | 已发通知的去重键（不用手动维护） |
+| `.claude/auto/dispatcher` | 插件钩子 | 调度员会话 id（不用手动维护） |
 
 **`current` 字段**：`task=T-0NN` `nonce=<8位随机hex>` `phase=<见下>` `start_sha=` `dirty=<开工时 git status --porcelain 的路径，逗号分隔>` `started=<epoch>` `worker=worker-T-0NN` `output=<output 文件路径>` `nudged=<看门狗催促时间 epoch，未催促则无此行>` `watch_ok=<看门狗判定正常的时间 epoch，同上>` `run_started=<本次 /task:loop 启动 epoch>` `max=` `hours=` `done=<本次已交付数>` `noprog=<连续无进展数>`。
 没有 current 时，`run_started/max/hours/done/noprog` 记在 `.claude/auto/session`（同格式），派发时拷进 current。
@@ -171,10 +172,11 @@ argument-hint: "[max=N 最多任务数，默认 10] [hours=N 最长时长，默�
 循环在跑时你很少停下来等人，需求方不盯着会话就不知道有事等着处理。遇到上文标注的节点，跑：
 
 ```bash
-bash $SK/notify.sh "<项目根绝对路径>" "<去重键>" "<消息>"
+bash $SK/notify.sh '<项目根绝对路径>' '<去重键>' '<消息>'
 ```
 
-- 消息 ≤ 100 字：`T-0NN <状态>：<一句话>` + 回复方式。例：「T-105 待决策：超限按扩列还是拒绝？回复 qtask -d T-105 "选 A"」「T-107 待验证：日期改相对时间，确认回复 qtask -d T-107 通过」「T-096 阻塞：需你核对生产库三列（H-022）」。
+- 三个参数都用**单引号**包住，消息里不要出现单引号、双引号、反引号、`$`（引用用「」）。
+- 消息 ≤ 100 字：`T-0NN <状态>：<一句话>` + 回复方式。例：`'T-105 待决策：超限按扩列还是拒绝？回复 qtask -d T-105 「选 A」'`、`'T-107 待验证：日期改相对时间，确认回复 qtask -d T-107 通过'`、`'T-096 阻塞：需你核对生产库三列（H-022）'`。
 - 消息只写任务 ID、状态、你自己概括的一句话；不要原样贴 worker 报告或需求方投递的大段文字。
 - 输出 `SENT` / `SKIP` / `FAIL` 都照常往下走，不重试；通知失败不影响循环。
 - **不要**为派发、验收中、空闲发通知：派发后你会结束回合，宿主自己的空闲提醒已经够了。

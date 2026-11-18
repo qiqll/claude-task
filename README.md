@@ -120,7 +120,7 @@ The loop sends a system notification when a task lands in "decision", "to verify
 | Variable | Effect |
 |----------|--------|
 | `TASK_NOTIFY=off` | No notifications |
-| `TASK_NOTIFY_CMD="<command>"` | Another channel: the command gets the title and message appended as two arguments (your own ntfy / Slack script, say) |
+| `TASK_NOTIFY_CMD="<command>"` | Another channel: the command gets the title and message appended as two arguments (your own ntfy / Slack script, say); it gets 10 seconds; don't end it with a `#` comment or `&` |
 
 ## Pane and status line
 

@@ -8,6 +8,7 @@
 #     TASK_NOTIFY_CMD="<命令>"     自定义，追加两个参数：标题、消息（如 ntfy / 企业微信 webhook 脚本）
 #     macOS osascript → Linux notify-send → 都没有则跳过
 #   标题：task · <项目目录名>
+#   发送最多等 10 秒（卡住的 webhook 不拖住循环），超时记 FAIL。
 #   输出一行：SENT <渠道> | SKIP <原因> | FAIL <渠道>；总是退出 0（通知失败不影响循环），参数缺失退出 2。
 # 兼容 macOS bash 3.2 + BSD 工具，也兼容 GNU。
 set -uo pipefail
@@ -30,21 +31,25 @@ elif (( ${#msg} > 100 )); then
 fi
 title="task · $(basename "$root")"
 
+# 限时执行：有 perl 用 alarm（exec 后计时保留，超时 SIGALRM 结束进程）；没有则不限时
+limit() { if command -v perl >/dev/null 2>&1; then perl -e 'alarm 10; exec @ARGV or exit 127' "$@"; else "$@"; fi; }
+
 # 标题、消息一律作为参数传入，不拼进脚本文本（消息里可能有引号）
 if [[ -n "${TASK_NOTIFY_CMD:-}" ]]; then
-  channel="cmd"; sh -c "$TASK_NOTIFY_CMD \"\$@\"" task-notify "$title" "$msg" >/dev/null 2>&1
+  channel="cmd"; limit sh -c "$TASK_NOTIFY_CMD \"\$@\"" task-notify "$title" "$msg" >/dev/null 2>&1
 elif [[ "$(uname -s)" == "Darwin" ]] && command -v osascript >/dev/null 2>&1; then
   channel="osascript"
-  osascript -e 'on run argv' -e 'display notification (item 2 of argv) with title (item 1 of argv) sound name "Glass"' -e 'end run' \
+  limit osascript -e 'on run argv' -e 'display notification (item 2 of argv) with title (item 1 of argv) sound name "Glass"' -e 'end run' \
     "$title" "$msg" >/dev/null 2>&1
 elif command -v notify-send >/dev/null 2>&1; then
-  channel="notify-send"; notify-send -- "$title" "$msg" >/dev/null 2>&1
+  channel="notify-send"; limit notify-send -- "$title" "$msg" >/dev/null 2>&1
 else
   echo "SKIP no-channel"; exit 0
 fi
 rc=$?
 (( rc == 0 )) || { echo "FAIL $channel (exit $rc)"; exit 0; }
 
-# 只留最近 200 个键
-{ [[ -f "$log" ]] && tail -n 199 "$log"; printf '%s\n' "$key"; } > "$log.tmp" && mv "$log.tmp" "$log"
+# 只留最近 200 个键；临时文件带 PID，并发调用不互相覆盖
+tmp="$log.$$"
+{ [[ -f "$log" ]] && tail -n 199 "$log"; printf '%s\n' "$key"; } > "$tmp" && mv "$tmp" "$log"
 echo "SENT $channel"
