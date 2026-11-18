@@ -228,6 +228,26 @@ describe('snapshot', () => {
     expect(metric('2026-11-15 10:00:00 | T-105 | DISPATCH | nonce=a\n2026-11-15 10:10:00 | T-105 | DONE→待验证 | commits 1\n', rejectedNow)).toBe(0)
   })
 
+  test('first pass: a REJECTED task stays rejected after the redispatch; a REJECTED never delivered does not count', () => {
+    const first = (log: string, backlog = BACKLOG) => buildSnapshot('/proj', { backlog, runLog: log, hasStopFile: false, inbox: 0 }, NOW).metrics
+    const log = `2026-11-15 10:00:00 | T-071 | DISPATCH | nonce=a
+2026-11-15 10:10:00 | T-071 | DONE→待验证 | commits 1
+2026-11-15 10:20:00 | T-105 | DISPATCH | nonce=b
+2026-11-15 10:30:00 | T-105 | DONE→待验证 | commits 1
+`
+    expect(first(log)).toMatchObject({ delivered: 2, redo: 0, firstPassRate: 1 })
+    const rejected = `${log}2026-11-15 11:00:00 | T-071 | REJECTED | 日期不对\n`
+    expect(first(rejected)).toMatchObject({ delivered: 2, redo: 1, firstPassRate: 0.5 })
+    // Redispatched (进行中 again, not 打回) and redelivered without 打回 in the line: still not a first pass.
+    const redelivered = `${rejected}2026-11-15 11:05:00 | T-071 | DISPATCH | nonce=c\n2026-11-15 11:30:00 | T-071 | DONE→待验证 | commits 1\n`
+    expect(first(redelivered)).toMatchObject({ delivered: 2, redo: 1, firstPassRate: 0.5 })
+    // Rejected twice is still one task that came back; REJECTED plus 打回 now counts it once.
+    const rejectedNow = BACKLOG.replace('| T-071 | 人工放行池管理 | 后端/池 | 进行中 |', '| T-071 | 人工放行池管理 | 后端/池 | 打回 |')
+    expect(first(`${redelivered}2026-11-15 12:00:00 | T-071 | REJECTED | 还不对\n`, rejectedNow)).toMatchObject({ redo: 1, firstPassRate: 0.5 })
+    // A REJECTED for a task run.log never delivered changes nothing.
+    expect(first(`${log}2026-11-15 11:00:00 | T-200 | REJECTED | 不对\n`)).toMatchObject({ delivered: 2, redo: 0, firstPassRate: 1 })
+  })
+
   test('human metrics with no run.log are empty and render as —', () => {
     const m = buildSnapshot('/proj', { backlog: BACKLOG, progress: PROGRESS, hasStopFile: false, inbox: 0 }, NOW).metrics
     expect(m).toMatchObject({ interventions: null, decisionWaitMs: null, rollbacks: 0, rollbackRate: null })

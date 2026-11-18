@@ -173,7 +173,7 @@ To pin a language, set the task plugin's `language` to `zh` or `en` in `/config`
 |---|---|
 | Done | archived / (archived + open tasks) |
 | Delivered | (archived + to verify) / same |
-| First pass | share of delivered tasks that were never rejected (per task) |
+| First pass | share of tasks delivered in run.log that were never rejected (per task): no `REJECTED` line, which still counts after the redispatch; for a log from before them, no `打回` redelivery and not in 打回 now |
 | 7d delivered | `DONE→` events in run.log over the last 7 days |
 | Median cycle | median time from `DISPATCH` to the result event in run.log |
 | Escalations | runs in run.log that ended in 待决策 / 阻塞, plus rejections (`REJECTED` lines; for a task with none, from an older log, its `打回` redeliveries plus one while it is in 打回 after a delivery). Only worker runs and answers merged by the loop count |

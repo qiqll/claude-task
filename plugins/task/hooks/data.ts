@@ -303,18 +303,22 @@ export function metricsOf(tasks: Task[], archive: Archive, events: LogEvent[], n
   const verify = tasks.filter(t => t.status === '待验证').length
   const total = completed + open
 
-  // First pass is per task: a task that ever came back (打回重做 delivery, or 打回 now) did not pass first time.
+  // First pass is per task: a delivered task that ever came back (a REJECTED line, which outlives the
+  // redispatch; or, from an older log, a 打回重做 delivery or 打回 now) did not pass first time.
   const delivered = new Set<string>()
   const redone = new Set<string>()
   let delivered7d = 0
   const weekAgo = now - 7 * DAY_MS
   for (const e of events) {
-    if (!/^T-\d+$/.test(e.subject) || !isDelivered(e)) continue
+    if (!/^T-\d+$/.test(e.subject)) continue
+    if (e.event === 'REJECTED') redone.add(e.subject)
+    if (!isDelivered(e)) continue
     delivered.add(e.subject)
     if (/打回/.test(e.event)) redone.add(e.subject)
     if (e.at >= weekAgo) delivered7d++
   }
-  for (const t of tasks) if (t.status === '打回' && delivered.has(t.id)) redone.add(t.id)
+  for (const t of tasks) if (t.status === '打回') redone.add(t.id)
+  for (const id of redone) if (!delivered.has(id)) redone.delete(id)
 
   const cycles: number[] = []
   const dispatched = new Map<string, number>()
