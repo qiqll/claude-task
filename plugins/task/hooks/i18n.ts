@@ -98,6 +98,10 @@ const zh = {
   runningCount: (n: number) => `${n} 运行中`,
   directAgents: (n: number) => `子代理 ${n} 个运行中`,
   sessionBusy: '会话执行中',
+  dispatcherDeny: (rel: string) =>
+    `自动循环运行中：调度员（主会话）不直接改项目文件，${rel} 不在可写范围（只允许 .claude/backlog.md、dev-plan.md、dev-progress.md、.claude/inbox/、.claude/auto/、.gitignore）。` +
+    '要改代码就写 .claude/inbox/ 投递成任务、交给 worker；需要看代码派只读子代理。不要改用 Bash 绕过。' +
+    '需求方坚持立刻手改时，先请需求方说「立刻停」让循环停机，或到另一个 worktree 里改。',
   noAgents: '本会话还没有派发子代理。/task:loop 派出执行者后会出现在这里。',
   events: '最近流水',
   noEvents: '还没有运行记录。',
@@ -174,6 +178,10 @@ const en: Strings = {
   runningCount: n => `${n} running`,
   directAgents: n => `${n} subagent${n === 1 ? '' : 's'} running`,
   sessionBusy: 'session working',
+  dispatcherDeny: rel =>
+    `The task loop is running: the dispatcher (main session) does not edit project files, and ${rel} is outside what it may write (.claude/backlog.md, dev-plan.md, dev-progress.md, .claude/inbox/, .claude/auto/, .gitignore). ` +
+    'To change code, drop a task in .claude/inbox/ for a worker; to read code, send a read-only subagent. Do not work around this with Bash. ' +
+    'If the user insists on a hand edit now, ask them to say "stop now" to halt the loop first, or edit in another worktree.',
   noAgents: 'No subagents yet this session. Workers sent by /task:loop show up here.',
   events: 'Recent log',
   noEvents: 'No runs logged yet.',

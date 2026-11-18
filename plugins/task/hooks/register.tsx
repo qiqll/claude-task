@@ -2,7 +2,22 @@ import { atom, read, update } from 'claude-code'
 import type { EngineInterface, PluginOptions, Register } from 'claude-code'
 
 import type { AgentRow, PoolFiles, Snapshot, Task } from '../types'
-import { buildSnapshot, cellWidth, clauseAcceptance, duration, noteClauses, percent, taskIdIn, transitions, wrapCells } from './data'
+import {
+  buildSnapshot,
+  cellWidth,
+  clauseAcceptance,
+  dispatcherForbidden,
+  duration,
+  loopStatusOf,
+  noteClauses,
+  parseCurrent,
+  parseRunLog,
+  parseSession,
+  percent,
+  taskIdIn,
+  transitions,
+  wrapCells,
+} from './data'
 import { firstAppleLanguage, pickLang, STRINGS, statusLabel } from './i18n'
 import type { Lang, Strings } from './i18n'
 
@@ -911,6 +926,36 @@ async function drawPane($: EngineInterface, els: Els, cols: number) {
   )
 }
 
+// ---------------------------------------------------------------- dispatcher guard
+
+/** The file-editing tools, by the argument naming the file. Bash goes unchecked: the loop's commit-attribution check covers it. */
+const EDIT_PATH_ARG: Record<string, string> = { Edit: 'file_path', Write: 'file_path', MultiEdit: 'file_path', NotebookEdit: 'notebook_path' }
+
+/**
+ * Why the main session may not edit `path` now, or null when it may. While its
+ * loop runs (or waits for work) the main session is the dispatcher, and the
+ * project's code is the worker's: a prompt alone does not keep a dispatcher
+ * from doing the work itself. A halted, stopped or stale loop guards nothing.
+ */
+async function dispatcherDenial($: EngineInterface, path: string): Promise<string | null> {
+  const now = await $.clock.now()
+  const root = await findRoot($, now)
+  if (!root) return null
+  const rel = dispatcherForbidden(root, path, await $.session.cwd())
+  if (rel === null) return null
+  const base = `${root}/.claude/auto`
+  const [current, session, runLog, hasStopFile] = await Promise.all([
+    readText($, `${base}/current`),
+    readText($, `${base}/session`),
+    readText($, `${base}/run.log`),
+    $.fs.exists(`${base}/STOP`).catch(() => false),
+  ])
+  const loop = loopStatusOf(true, parseCurrent(current), parseSession(current, session), parseRunLog(runLog), hasStopFile, now)
+  if (loop !== 'running' && loop !== 'waiting') return null
+  await currentStrings($)
+  return L.dispatcherDeny(rel)
+}
+
 // ---------------------------------------------------------------- hooks
 
 export const register: Register = (on, options) => {
@@ -969,6 +1014,17 @@ export const register: Register = (on, options) => {
     ensureTicking($)
     void refresh($)
     return ran
+  })
+
+  // Subagents (the worker, reviewers) carry agentId and edit freely; only the main loop is checked.
+  on('tool.call', async ($, e, next) => {
+    const arg = EDIT_PATH_ARG[e.tool]
+    const path = arg && !e.agentId ? (e as unknown as Record<string, unknown>)[arg] : undefined
+    if (typeof path === 'string') {
+      const deny = await dispatcherDenial($, path).catch(() => null)
+      if (deny) return { deny }
+    }
+    return next(e)
   })
 
   on('tool.call', { tool: 'Agent' }, async ($, e, next) => {

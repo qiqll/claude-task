@@ -747,3 +747,42 @@ test('blank subagent rows an older version stored are not drawn, and go on the n
   await $.classic.SubagentStop({ agent_id: 'b1', agent_type: 'Explore' })
   expect((stored as { id: string }[]).map(a => a.id)).toEqual(['a1', 'b1'])
 })
+
+test('while its loop runs the main session may write the pool but not the code; a stopped loop guards nothing', async ($, on) => {
+  let files: Record<string, string> = FILES
+  const ran: string[] = []
+  on('session.cwd', () => ({ value: '/proj/backend' }))
+  on('clock.now', () => ({ value: new Date(2026, 10, 15, 12, 0, 0).getTime() }))
+  on('fs.exists', (_$, e) => ({ value: e.path in files }))
+  on('fs.list', () => ({ value: [] }))
+  on('fs.read', (_$, e) => (files[e.path] === undefined ? { deny: 'ENOENT' } : { value: files[e.path]! }))
+  on('process.run', () => ({ deny: 'not macOS' }))
+  on('env.get', (_$, e) => ({ value: e.name === 'LANG' ? 'zh_CN.UTF-8' : undefined }))
+  on('tool.call', (_$, e) => {
+    const input = e as unknown as { file_path?: string; notebook_path?: string; command?: string }
+    ran.push(`${e.tool} ${input.file_path ?? input.notebook_path ?? input.command}`)
+    return { result: {} as never }
+  })
+
+  const edit = (file_path: string) => $.tool.call({ tool: 'Edit', file_path, old_string: 'a', new_string: 'b' } as never)
+  const denied = await edit('app.py')
+  expect(denied).toMatchObject({ deny: expect.stringContaining('backend/app.py') })
+  expect(denied.deny).toContain('.claude/inbox/')
+  const notebook = await $.tool.call({ tool: 'NotebookEdit', notebook_path: '/proj/n.ipynb', new_source: '' } as never)
+  expect(notebook).toMatchObject({ deny: expect.stringContaining('n.ipynb') })
+  expect(ran).toEqual([])
+
+  // The pool, the run dirs, files outside the project and Bash go through.
+  await edit('/proj/.claude/backlog.md')
+  await $.tool.call({ tool: 'Write', file_path: '../.claude/inbox/1.md', content: 'x' } as never)
+  await edit('/tmp/notes.md')
+  await $.tool.call({ tool: 'Bash', command: 'git status' } as never)
+  expect(ran).toEqual(['Edit /proj/.claude/backlog.md', 'Write ../.claude/inbox/1.md', 'Edit /tmp/notes.md', 'Bash git status'])
+
+  // Halted, then stopped: the guard stands down.
+  files = { ...FILES, '/proj/.claude/auto/current': `${CURRENT}phase=halted\n` }
+  await edit('/proj/src/a.py')
+  files = { '/proj/.claude/backlog.md': BACKLOG, '/proj/.claude/auto/run.log': `${RUN_LOG}2026-11-15 11:50:00 | STOP | 池空\n` }
+  await edit('/proj/src/b.py')
+  expect(ran.slice(-2)).toEqual(['Edit /proj/src/a.py', 'Edit /proj/src/b.py'])
+})

@@ -367,6 +367,32 @@ export function loopStatusOf(
   return 'idle'
 }
 
+/** `path` made absolute against `cwd`, with `.`, `..` and repeated slashes resolved (no symlinks). */
+export function resolvePath(path: string, cwd: string): string {
+  const parts: string[] = []
+  for (const part of (path.startsWith('/') ? path : `${cwd}/${path}`).split('/')) {
+    if (part === '..') parts.pop()
+    else if (part && part !== '.') parts.push(part)
+  }
+  return `/${parts.join('/')}`
+}
+
+/** What the dispatcher keeps writing while its loop runs: the pool files, the loop's run dirs, `.gitignore`. */
+const DISPATCHER_WRITABLE = [/^\.claude\/(backlog|dev-plan|dev-progress)\.md$/, /^\.claude\/(inbox|auto)\//, /^\.gitignore$/]
+
+/**
+ * The project-relative path the dispatcher may not edit while its loop runs, or
+ * null when it may: outside the project (memory, scratch) and the pool's own
+ * files are its to write; the code is the worker's.
+ */
+export function dispatcherForbidden(root: string, path: string, cwd: string): string | null {
+  const base = root.replace(/\/+$/, '')
+  const abs = resolvePath(path, cwd)
+  if (!abs.startsWith(`${base}/`)) return null
+  const rel = abs.slice(base.length + 1)
+  return DISPATCHER_WRITABLE.some(re => re.test(rel)) ? null : rel
+}
+
 export function buildSnapshot(root: string | null, files: PoolFiles, now: number): Snapshot {
   const initialized = root !== null && files.backlog !== undefined
   const backlog = parseBacklog(files.backlog ?? '')

@@ -3,6 +3,7 @@ import { describe, expect, test } from 'claude-code/testing'
 import {
   buildSnapshot,
   cellWidth,
+  dispatcherForbidden,
   loopStatusOf,
   parseBacklog,
   parseCurrent,
@@ -11,6 +12,7 @@ import {
   parseRunLog,
   parseSession,
   noteClauses,
+  resolvePath,
   normalizeStatus,
   splitRow,
   transitions,
@@ -176,5 +178,32 @@ describe('wrapping', () => {
     expect(cellWidth('⚠')).toBe(1)
     expect(wrapCells('𠮷𠮷𠮷𠮷𠮷𠮷', 6)).toEqual(['𠮷𠮷𠮷', '𠮷𠮷𠮷'])
     for (const line of wrapCells('修复✅完成任务😀好', 11)) expect(cellWidth(line)).toBeLessThanOrEqual(11)
+  })
+})
+
+describe('dispatcher guard', () => {
+  test('resolvePath makes a path absolute and resolves dots', () => {
+    expect(resolvePath('src/a.ts', '/proj/backend')).toBe('/proj/backend/src/a.ts')
+    expect(resolvePath('/proj/./x//y/../z.ts', '/elsewhere')).toBe('/proj/x/z.ts')
+    expect(resolvePath('../../..', '/a')).toBe('/')
+  })
+
+  test('the pool files, the run dirs and .gitignore stay writable; the rest of the project does not', () => {
+    for (const ok of ['.claude/backlog.md', '.claude/dev-plan.md', '.claude/dev-progress.md', '.claude/inbox/1.md', '.claude/auto/current', '.gitignore']) {
+      expect(dispatcherForbidden('/proj', `/proj/${ok}`, '/proj')).toBeNull()
+    }
+    expect(dispatcherForbidden('/proj', '/proj/src/app.py', '/proj')).toBe('src/app.py')
+    expect(dispatcherForbidden('/proj/', 'app.py', '/proj/backend')).toBe('backend/app.py')
+    // Lookalikes and escapes through .. are judged by where they land.
+    expect(dispatcherForbidden('/proj', '/proj/.claude/backlog.md.bak', '/proj')).toBe('.claude/backlog.md.bak')
+    expect(dispatcherForbidden('/proj', '/proj/.claude/settings.json', '/proj')).toBe('.claude/settings.json')
+    expect(dispatcherForbidden('/proj', '/proj/.claude/auto/../../src/x.ts', '/proj')).toBe('src/x.ts')
+    expect(dispatcherForbidden('/proj', '/proj/src/x/../../.claude/inbox/2.md', '/proj')).toBeNull()
+  })
+
+  test('files outside the project are not the guard\'s business', () => {
+    expect(dispatcherForbidden('/proj', '/home/u/.claude/memory/a.md', '/proj')).toBeNull()
+    expect(dispatcherForbidden('/proj', '/project2/src/a.ts', '/proj')).toBeNull()
+    expect(dispatcherForbidden('/proj', '/tmp/scratch.txt', '/proj')).toBeNull()
   })
 })
