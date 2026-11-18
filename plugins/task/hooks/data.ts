@@ -349,15 +349,18 @@ export function runOutcome(e: LogEvent): { result: string; state: string } | nul
 }
 
 /**
- * What the loop needed from a person, from run.log plus the backlog:
- * - interventions: runs that ended in 待决策 / 阻塞, plus every rejection (a
- *   `打回` redelivery, and a task sitting in 打回 now);
- * - decision wait: median time from a run ending in 待决策 to its answer (the
- *   task's next `DECIDED` line, or for logs without one its next `DISPATCH`);
- *   unanswered ones are not counted;
- * - rollbacks: runs that ended `FAILED`, which the loop resets to their start
- *   (`refs/auto-failed/*`), over all ended runs.
- * Each is null while run.log holds no ended run (and, for interventions, no rejection) to count.
+ * What the loop needed from a person, counting only worker runs and the answers
+ * merged into the loop (run.log plus the backlog):
+ * - interventions: runs that ended in 待决策 / 阻塞, plus rejections: the task's
+ *   `REJECTED` lines; a task with none (a log from before them) falls back to its
+ *   `打回` redeliveries, plus one while it sits in 打回 after a delivery;
+ * - decision wait: median time from a run ending in 待决策 to its answer: the
+ *   task's next `DECIDED` line, or with none its next `DISPATCH` (queueing
+ *   included); unanswered ones are not counted;
+ * - rollbacks: `ROLLBACK` lines (a FAILED run actually reset to its start and
+ *   kept in `refs/auto-failed/*`; a FAILED run left in place is not one), over
+ *   all ended runs.
+ * Each is null while run.log holds nothing of its kind to count.
  */
 function humanMetricsOf(
   tasks: Task[],
@@ -369,25 +372,32 @@ function humanMetricsOf(
   const waits: number[] = []
   const suspended = new Map<string, number>()
   const delivered = new Set<string>()
+  const rejected = new Map<string, number>()
+  const legacyRejected = new Map<string, number>()
+  const bump = (m: Map<string, number>, id: string) => m.set(id, (m.get(id) ?? 0) + 1)
   for (const e of events) {
+    if (!/^T-\d+$/.test(e.subject)) continue
     const outcome = runOutcome(e)
     if (outcome) {
       runs++
-      if (outcome.result === 'FAILED') rollbacks++
       if (/^(待决策|阻塞)/.test(outcome.state)) interventions++
       if (outcome.result === 'DONE') {
         delivered.add(e.subject)
-        if (/打回/.test(e.event)) interventions++
+        if (/打回/.test(e.event)) bump(legacyRejected, e.subject)
       }
       if (outcome.state.startsWith('待决策')) suspended.set(e.subject, e.at)
       else suspended.delete(e.subject)
-    } else if ((e.event === 'DECIDED' || e.event === 'DISPATCH') && suspended.has(e.subject)) {
+    } else if (e.event === 'ROLLBACK') rollbacks++
+    else if (e.event === 'REJECTED') bump(rejected, e.subject)
+    else if ((e.event === 'DECIDED' || e.event === 'DISPATCH') && suspended.has(e.subject)) {
       waits.push(e.at - suspended.get(e.subject)!)
       suspended.delete(e.subject)
     }
   }
-  // A rejection not yet redone shows only as the task's status.
-  for (const t of tasks) if (t.status === '打回' && delivered.has(t.id)) interventions++
+  for (const n of rejected.values()) interventions += n
+  for (const [id, n] of legacyRejected) if (!rejected.has(id)) interventions += n
+  // An old log's rejection not yet redone shows only as the task's status.
+  for (const t of tasks) if (t.status === '打回' && delivered.has(t.id) && !rejected.has(t.id)) interventions++
   return {
     interventions: runs || interventions ? interventions : null,
     decisionWaitMs: median(waits),

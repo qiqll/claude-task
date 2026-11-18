@@ -60,7 +60,7 @@ argument-hint: "[max=N 最多任务数，默认 10] [hours=N 最长时长，默�
    - `type: task` → 按 `${CLAUDE_PLUGIN_ROOT}/skills/add/SKILL.md` 的规则录入（Read 它，不要调用 /task:add）（查重、分配 ID、拆分、判优先级、写模块、备注首写「验收：…」）。`priority` 只是建议；判定不确定时不问，按后果规则定级并备注「优先级 AI 判定，可改」。
    - `type: decision`，`ref` 指向的任务：
      - 在「待决策」表 → 答复写进备注「需求方决策（日期）：…」，删表行，状态改 `待开始`；`run.log` 追加 `<时间> | T-0NN | DECIDED | <答复首句，截到 40 字>`（面板据此算决策等待时长）。
-     - 状态是 `待验证` 且答复是「通过/OK」类 → 按 `${CLAUDE_PLUGIN_ROOT}/skills/next/SKILL.md`「需求方确认后的收尾」归档；是「打回」类 → 状态 `打回`，备注追加问题，排队重做（派发时带上打回意见）。
+     - 状态是 `待验证` 且答复是「通过/OK」类 → 按 `${CLAUDE_PLUGIN_ROOT}/skills/next/SKILL.md`「需求方确认后的收尾」归档；是「打回」类 → 状态 `打回`，备注追加问题，排队重做（派发时带上打回意见）；`run.log` 追加 `<时间> | T-0NN | REJECTED | <意见首句，截到 40 字>`（面板据此计人工介入）。
      - 状态是 `阻塞` → 答复写进备注，若答复表明阻塞已解除则改 `待开始`。
      - 找不到 / 无法判断 → 原文挂进「待决策」表问需求方，不猜（按「通知需求方」发通知，去重键用 inbox 文件名）。
    - 处理完的文件移到 `.claude/inbox/.merged/`。有改动就 commit `docs(task): 合并投递 <ID 列表>`。
@@ -111,7 +111,7 @@ argument-hint: "[max=N 最多任务数，默认 10] [hours=N 最长时长，默�
 **回滚**（只在 FAILED 类结论时）：
 1. 同 C1「提交归属」核对：区间里有任何不属于本任务的提交 → **不回滚**，挂待决策，转 E。
 2. 列出 worker 遗留的未提交文件（对比 dirty），挂待决策「失败任务的遗留文件：<列表>，请决定去留」——**不自动删**。
-3. `git update-ref refs/auto-failed/T-0NN-<N> HEAD`，然后 `git reset --keep <start>`。`--keep` 报错就停手，转 E 并报告原样错误。
+3. `git update-ref refs/auto-failed/T-0NN-<N> HEAD`，然后 `git reset --keep <start>`。`--keep` 报错就停手，转 E 并报告原样错误。两步都成功后 `run.log` 追加 `<时间> | T-0NN | ROLLBACK | refs/auto-failed/T-0NN-<N>`（面板据此算回滚率；没回滚的不写）。
 
 **C3. 衍生任务**（来自 `DERIVED`，由你录入，不是 worker）：
 - 层级 = 父任务备注里的「衍生层级」+1（无则父为 0）。**层级 > 2 不录**，只在简报里提一句。

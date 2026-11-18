@@ -159,34 +159,73 @@ describe('snapshot', () => {
     expect(m.rollbackRate).toBe(0)
   })
 
-  test('human metrics: answered decisions, FAILED runs as rollbacks, a rejection still in 打回; old rates unchanged', () => {
+  test('human metrics: answered decisions, ROLLBACK lines as rollbacks, a rejection still in 打回; old rates unchanged', () => {
     const log = `${RUN_LOG}2026-11-15 12:00:00 | T-071 | FAILED（超时）→待开始 | commits 2 | 3h | 衍生 0 | 超时
+2026-11-15 12:00:05 | T-071 | ROLLBACK | refs/auto-failed/T-071-1
 2026-11-15 12:30:00 | T-105 | DECIDED | 选 A
 2026-11-15 12:31:00 | T-105 | DISPATCH | nonce=ee
 2026-11-15 12:51:00 | T-105 | BLOCKED→阻塞 | commits 0 | 20m | 衍生 0 | 缺凭据
 2026-11-15 13:00:00 | T-111 | DISPATCH | nonce=ff
 2026-11-15 13:10:00 | T-111 | NEEDS_DECISION→待决策 | commits 0 | 10m | 衍生 0 | 两方案
 2026-11-15 15:10:00 | T-111 | DISPATCH | nonce=gg
-2026-11-15 15:20:00 | T-111 | FAILED→阻塞 | commits 1 | 10m | 衍生 0 | 测试红
+2026-11-15 15:20:00 | T-111 | FAILED→待决策 | commits 1 | 10m | 衍生 0 | 区间有他人提交，未回滚
 2026-11-15 15:21:00 | T-068 | WATCHDOG | IDLE | 已催促
 `
     const backlog = BACKLOG.replace('| T-107 | 日期炸弹改相对时间 | 测试 | 待验证 |', '| T-107 | 日期炸弹改相对时间 | 测试 | 打回 |')
     const base = { backlog: BACKLOG, progress: PROGRESS, runLog: log, hasStopFile: false, inbox: 0 }
     const m = buildSnapshot('/proj', base, NOW).metrics
-    // Ended runs: DONE, NEEDS_DECISION, DONE（打回重做）, FAILED（超时）, BLOCKED, NEEDS_DECISION, FAILED = 7.
-    expect(m.rollbacks).toBe(2)
-    expect(m.rollbackRate).toBe(2 / 7)
-    // 待决策 ×2 + 阻塞 ×2 + one 打回 redelivery.
+    // Ended runs: DONE, NEEDS_DECISION, DONE（打回重做）, FAILED（超时）, BLOCKED, NEEDS_DECISION, FAILED = 7;
+    // only T-071's FAILED was reset (its ROLLBACK line), T-111's was left in place.
+    expect(m.rollbacks).toBe(1)
+    expect(m.rollbackRate).toBe(1 / 7)
+    // 待决策 ×3 (FAILED→待决策 included) + 阻塞 ×1 + one 打回 redelivery (an old log: no REJECTED line).
     expect(m.interventions).toBe(5)
-    // T-105: 10:41 → DECIDED 12:30 (109m, the DISPATCH after it does not count again); T-111: 13:10 → next DISPATCH 15:10 (120m).
+    // T-105: 10:41 → DECIDED 12:30 (109m); T-111: 13:10 → next DISPATCH 15:10 (120m); upper median of two.
     expect(m.decisionWaitMs).toBe(120 * 60 * 1000)
-    // WATCHDOG / DECIDED lines and FAILED runs leave the existing rates as they were.
+    // WATCHDOG / DECIDED / ROLLBACK lines and FAILED runs leave the existing rates as they were.
     const before = buildSnapshot('/proj', { ...base, runLog: RUN_LOG }, NOW).metrics
     expect(m.firstPassRate).toBe(before.firstPassRate)
     expect(m.deliveryRate).toBe(before.deliveryRate)
     expect(m.delivered).toBe(before.delivered)
-    // Rejected again after its redelivery: the task now in 打回 adds one more.
+    // An old log's task in 打回 after its redelivery adds one more.
     expect(buildSnapshot('/proj', { ...base, backlog }, NOW).metrics.interventions).toBe(6)
+  })
+
+  test('decision wait: DECIDED wins over the DISPATCH after it, each round counts, stray lines are ignored', () => {
+    const wait = (log: string) => buildSnapshot('/proj', { backlog: BACKLOG, runLog: log, hasStopFile: false, inbox: 0 }, NOW).metrics.decisionWaitMs
+    // Only T-105: DECIDED at 12:30 is the answer (109m), not the DISPATCH a minute later (110m).
+    expect(wait(`${RUN_LOG}2026-11-15 12:30:00 | T-105 | DECIDED | 选 A\n2026-11-15 12:31:00 | T-105 | DISPATCH | nonce=ee\n`)).toBe(109 * 60 * 1000)
+    // Without DECIDED the first DISPATCH after it is the answer; a second one adds nothing.
+    expect(wait(`${RUN_LOG}2026-11-15 12:31:00 | T-105 | DISPATCH | nonce=ee\n2026-11-15 12:41:00 | T-105 | DISPATCH | nonce=ff\n`)).toBe(110 * 60 * 1000)
+    // Two rounds of 待决策 → DECIDED on one task: 10m and 30m, both counted (upper median 30m; 10m alone would give 10m).
+    const two = `2026-11-15 10:00:00 | T-200 | DISPATCH | nonce=a
+2026-11-15 10:10:00 | T-200 | NEEDS_DECISION→待决策 | commits 0
+2026-11-15 10:20:00 | T-200 | DECIDED | 选 A
+2026-11-15 10:21:00 | T-200 | DISPATCH | nonce=b
+2026-11-15 10:30:00 | T-200 | NEEDS_DECISION→待决策 | commits 0
+2026-11-15 11:00:00 | T-200 | DECIDED | 选 B
+`
+    expect(wait(two)).toBe(30 * 60 * 1000)
+    expect(wait(two.split('\n').slice(0, 3).join('\n'))).toBe(10 * 60 * 1000)
+    // A DECIDED with no 待决策 before it, or for another task, is no wait.
+    expect(wait('2026-11-15 10:00:00 | T-200 | DECIDED | 选 A\n2026-11-15 10:10:00 | T-200 | DONE→待验证 | commits 1\n')).toBeNull()
+  })
+
+  test('rejections: REJECTED lines count and stay counted after the redispatch; a 打回 never delivered does not', () => {
+    const metric = (log: string, backlog = BACKLOG) => buildSnapshot('/proj', { backlog, runLog: log, hasStopFile: false, inbox: 0 }, NOW).metrics.interventions
+    const log = `2026-11-15 10:00:00 | T-071 | DISPATCH | nonce=a
+2026-11-15 10:10:00 | T-071 | DONE→待验证 | commits 1
+2026-11-15 11:00:00 | T-071 | REJECTED | 日期不对
+`
+    const rejectedNow = BACKLOG.replace('| T-071 | 人工放行池管理 | 后端/池 | 进行中 |', '| T-071 | 人工放行池管理 | 后端/池 | 打回 |')
+    // In 打回 now with a REJECTED line: counted once, not twice.
+    expect(metric(log, rejectedNow)).toBe(1)
+    // Redispatched (进行中 again) and redelivered: the rejection does not drop out.
+    expect(metric(`${log}2026-11-15 11:05:00 | T-071 | DISPATCH | nonce=b\n2026-11-15 11:30:00 | T-071 | DONE→待验证 | commits 1\n`)).toBe(1)
+    // Rejected twice: two.
+    expect(metric(`${log}2026-11-15 11:30:00 | T-071 | DONE→待验证 | commits 1\n2026-11-15 12:00:00 | T-071 | REJECTED | 还不对\n`)).toBe(2)
+    // A task in 打回 that run.log never delivered (rejected outside the loop) is not counted.
+    expect(metric('2026-11-15 10:00:00 | T-105 | DISPATCH | nonce=a\n2026-11-15 10:10:00 | T-105 | DONE→待验证 | commits 1\n', rejectedNow)).toBe(0)
   })
 
   test('human metrics with no run.log are empty and render as —', () => {

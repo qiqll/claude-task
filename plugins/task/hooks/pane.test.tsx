@@ -451,6 +451,7 @@ test('the pane frames the current task and shows metrics as tiles only where lab
 
 test('intervention, decision-wait and rollback metrics fit the pane at every width, and show — with no run.log', async ($, on) => {
   const log = `${RUN_LOG}2026-11-15 11:40:00 | T-111 | FAILED（停滞：IDLE out=40m）→待开始 | commits 1 | 7m | 衍生 0 | 停滞
+2026-11-15 11:40:05 | T-111 | ROLLBACK | refs/auto-failed/T-111-1
 2026-11-27 23:41:00 | T-105 | DECIDED | 选 A
 `
   let files: Record<string, string> = { ...FILES, '/proj/.claude/auto/run.log': log }
