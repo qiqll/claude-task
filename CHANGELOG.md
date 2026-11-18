@@ -2,6 +2,10 @@
 
 All notable changes to the `task` plugin. Versions follow [semver](https://semver.org/); the version in `plugins/task/.claude-plugin/plugin.json` is what Claude Code uses to detect updates.
 
+## 0.3.11 — 2026-11-18
+
+- Pane, human blockers: the status is the first status-like cell from the fourth column on, so a row with an extra date or note column, or a trailing empty cell, still reads 已完成 / 已关闭 and leaves the blocker list. 已决策 and 取消 also count as closed. Closed is judged from the start of the status only: 待处理（采购已完成，待安装） stays a blocker.
+
 ## 0.3.10 — 2026-11-18
 
 - `/task:status T-0NN` (T-013): one task's timeline, oldest first — its `run.log` lines (dispatch, result, watchdog), the branch's commits that mention it (dispatcher bookkeeping marked as such, plus hashes listed in `dev-progress.md`), `refs/auto-failed/*`, decisions, rejections and inbox replies, human blockers and archiving, with parent and derived tasks. An unknown ID says so and gives the ID range; no argument keeps the overview.
