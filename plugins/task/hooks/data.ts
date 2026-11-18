@@ -318,6 +318,7 @@ export function metricsOf(tasks: Task[], archive: Archive, events: LogEvent[], n
     if (e.at >= weekAgo) delivered7d++
   }
   for (const t of tasks) if (t.status === '打回') redone.add(t.id)
+  // Every source above counts only tasks run.log delivered.
   for (const id of redone) if (!delivered.has(id)) redone.delete(id)
 
   const cycles: number[] = []
