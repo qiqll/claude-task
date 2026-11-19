@@ -433,9 +433,9 @@ test('the pane frames the current task and shows metrics as tiles only where lab
     // The current task sits in an accent-framed card at any width.
     expect(boxes.some(b => b.props.borderStyle === 'round' && b.props.borderColor === 'claude')).toBe(true)
     const tiles = boxes.filter(b => b.props.borderStyle === 'round' && b.props.borderColor === 'subtle')
-    expect(tiles).toHaveLength(tiled ? 11 : 0)
+    expect(tiles).toHaveLength(tiled ? 12 : 0)
     // Every label is drawn whole either way.
-    for (const label of ['完成率', '一次通过', '中位周期', '已归档', '人工介入', '决策等待', '回滚率']) expect(await ui.find({ type: 'Text', text: label })).toBeDefined()
+    for (const label of ['完成率', '一次通过', '中位周期', '已归档', '人工介入', '决策等待', '回滚率', '免验关闭']) expect(await ui.find({ type: 'Text', text: label })).toBeDefined()
     // The running task's status is a filled tag with dark text; a status with no colour is a plain tag.
     const tags = await ui.findAll({ type: 'Text', text: /进行中/ })
     expect(tags.some(t => t.props.backgroundColor === 'claude' && t.props.color === 'black')).toBe(true)
@@ -870,4 +870,36 @@ test('the guard covers MCP file tools, follows the session that ran /task:loop, 
   files = { ...noCurrent, '/proj/.claude/auto/STOP': '' }
   expect(await edit()).not.toHaveProperty('deny')
   expect(ran).toEqual(['Edit', 'Write', 'Edit'])
+})
+
+test('a 待验证 card shows how to verify and when it passes by default; those clauses leave the note', async ($, on) => {
+  const backlog = BACKLOG.replace(
+    '| T-107 | 日期炸弹改相对时间 | 测试 | 待验证 | T-071 | 来源：衍生自 T-104（第 1 层）；验收：用例不依赖当天 |',
+    '| T-107 | 日期炸弹改相对时间 | 测试 | 待验证 | T-071 | 来源：衍生自 T-104（第 1 层）；验收：用例不依赖当天；待验证起：2026-11-10；怎么验：改系统日期后跑 `bun test` |',
+  )
+  expect(backlog).not.toBe(BACKLOG)
+  const files: Record<string, string> = { ...FILES, '/proj/.claude/backlog.md': backlog }
+  on('session.cwd', () => ({ value: '/proj' }))
+  on('clock.now', () => ({ value: new Date(2026, 10, 15, 12, 0, 0).getTime() }))
+  on('fs.exists', (_$, e) => ({ value: e.path in files }))
+  on('fs.list', () => ({ value: [] }))
+  on('fs.read', (_$, e) => (files[e.path] === undefined ? { deny: 'ENOENT' } : { value: files[e.path]! }))
+  on('ui.open', () => ({ value: { isPlaced: true as const } }))
+  on('ui.status', () => ({ value: undefined }))
+  on('process.run', () => ({ deny: 'not macOS' }))
+  on('env.get', (_$, e) => ({ value: e.name === 'LANG' ? 'zh_CN.UTF-8' : undefined }))
+  on('agent.list', () => ({ value: [] }))
+  await $.command.run(RUN)
+  const ui = await $.ui.mount({ plugin: 'task', surface: 'terminal', component: 'Pane', requestId: 'task-dash', props: { ...PANE_PROPS, bodyColumns: 80 } })
+  await ui.press({ key: 'filter:all' })
+  await ui.press({ key: 'task:T-107' })
+  expect((await ui.find({ key: 'field:T-107:howToVerify' }))?.text).toContain('改系统日期后跑')
+  expect((await ui.find({ key: 'field:T-107:expiry' }))?.text).toContain('2 天后默认通过（11-17）')
+  const note = (await ui.find({ key: 'field:T-107:note' }))?.text ?? ''
+  expect(note).not.toContain('怎么验')
+  expect(note).not.toContain('待验证起')
+  // A task not in 待验证 has no such fields.
+  await ui.press({ key: 'task:T-111' })
+  expect(await ui.find({ key: 'field:T-111:howToVerify' })).toBeUndefined()
+  await ui.unmount()
 })
