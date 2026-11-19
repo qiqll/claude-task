@@ -812,7 +812,8 @@ async function drawPane($: EngineInterface, els: Els, cols: number) {
   const agentList = namedAgents(allAgents)
   const active = FILTERS.find(f => f.key === filterKey) ?? FILTERS[0]!
   const tile = tileWidth(cols, Object.values(L.stats))
-  const shown = verifyOrder(snap.tasks.filter(active.match))
+  // Only the 待验证 filter reorders: in a mixed list it would put a P2 row where a P0 row was.
+  const shown = active.key === 'verify' ? verifyOrder(snap.tasks.filter(active.match)) : snap.tasks.filter(active.match)
   const sessionText = s
     ? [
         L.delivered(s.done, s.max),

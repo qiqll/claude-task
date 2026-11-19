@@ -104,11 +104,18 @@ export function signTierOf(signs: string): 1 | 2 | 3 | null {
   return /先看/.test(signs) ? 1 : 2
 }
 
-/** 待验证 rows in the order to check them: look-first, no sign, unchecked, then ✓; others keep their place relative to each other. */
+/**
+ * 待验证 rows in the order to check them: look-first, no sign, unchecked, then ✓; within a tier the longest
+ * waiting first (no start day last). Other rows keep their places.
+ */
 export function verifyOrder(tasks: Task[]): Task[] {
   const rank = (t: Task) => (t.signTier === 1 ? 0 : t.signTier === 2 ? 1 : t.signTier === null ? 2 : 3)
+  const since = (t: Task) => t.verifySince || '9999'
   const verify = tasks.filter(t => t.status === '待验证')
-  const sorted = verify.map((t, i) => ({ t, i })).sort((a, b) => rank(a.t) - rank(b.t) || a.i - b.i).map(x => x.t)
+  const sorted = verify
+    .map((t, i) => ({ t, i }))
+    .sort((a, b) => rank(a.t) - rank(b.t) || since(a.t).localeCompare(since(b.t)) || a.i - b.i)
+    .map(x => x.t)
   let k = 0
   return tasks.map(t => (t.status === '待验证' ? sorted[k++]! : t))
 }
