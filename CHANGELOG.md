@@ -2,6 +2,18 @@
 
 All notable changes to the `task` plugin. Versions follow [semver](https://semver.org/); the version in `plugins/task/.claude-plugin/plugin.json` is what Claude Code uses to detect updates.
 
+## 0.3.12 — 2026-11-19
+
+Fewer tasks waiting on you in 待验证 (to verify):
+
+- Auto acceptance: when the loop's machine checks all pass (`PASS`, no test-weakening warning at all, no high-risk path, no new decision, no assumptions), a task that only touched tests (rule a), or a P2 / P3 task tagged `验收方式：自动` by `/task:add` with acceptance criteria the requester gave (rule b), is archived as 已完成 straight away. `run.log` logs `DONE→已完成（自动验收）`; the brief still goes out, without a notification. `/task:next` has no auto acceptance.
+- Default pass on timeout: a task in 待验证 for `**待验证超时：** N 天` (7 when the backlog doesn't say; `0` turns it off) is announced a day ahead in one notification, then archived as passed if nobody rejected it in the next 24 hours. Before closing, the dispatcher checks that the delivered commits are still on the branch and not reverted; if they aren't, the task goes to 待决策 instead. Older tasks get their start date from their commits on the first check (`· 存量`). High-risk changes, changes to tests and notes saying `默认通过：否` never pass by default. The loop runs the check after merging the inbox and when idle on a heartbeat; `/task:next` runs it when no loop is running. `run.log` logs `TIMEOUT_PASS`.
+- Every task entering 待验证 gets `待验证起` and `怎么验` (≤3 steps, a command or URL first) in its note; the worker report has a new `VERIFY` field. Redelivery replaces the old clauses.
+- Rejecting an archived task (`qtask -d T-0NN "打回：…"`) reopens it. `dev-progress.md` records say how each task was closed: by the requester, by auto acceptance or by timeout.
+- `qtask`: `-d T-1,T-2 "…"` answers several tasks at once; `qtask --pass [IDs]` confirms all (or the given) tasks in 待验证, and `--except T-x` leaves some out. A stale pass for a task no longer in 待验证 is skipped. A loop counts as running while its last START / STOP line is START.
+- Pane: a 待验证 card shows 怎么验 and when it passes by default (or that it won't); a new 免验关闭 (Auto-closed) tile counts tasks closed without anyone looking, which are left out of the first-pass rate. `/task:status` lists tasks in 待验证 with days waiting, steps and due date, plus the `qtask --pass` command.
+- Rules shared by the loop and `/task:next` are in `skills/loop/VERIFY.md`.
+
 ## 0.3.11 — 2026-11-18
 
 - Pane, human blockers: the status is the first status-like cell from the fourth column on, so a row with an extra date or note column, or a trailing empty cell, still reads 已完成 / 已关闭 and leaves the blocker list. 已决策 and 取消 also count as closed. Closed is judged from the start of the status only: 待处理（采购已完成，待安装） stays a blocker.
