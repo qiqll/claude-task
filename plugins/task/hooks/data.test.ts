@@ -294,19 +294,23 @@ describe('snapshot', () => {
 2026-11-15 11:00:00 | T-107 | TIMEOUT_PASS | 7 天无人打回
 `
     expect(first(log)).toMatchObject({ delivered: 3, autoClosed: 2, redo: 0, firstPassRate: 1 })
+    // Closed, rejected, closed again by timeout: one task, counted once; rejected and still open: not counted.
+    expect(first(`${log}2026-11-15 11:10:00 | T-107 | REJECTED | 不对\n2026-11-15 11:20:00 | T-107 | TIMEOUT_PASS | 7\n`).autoClosed).toBe(2)
     // Only T-071 was judged by a person; once it is rejected the rate says so, not 2/3.
     expect(first(`${log}2026-11-15 11:10:00 | T-071 | REJECTED | 不对\n`)).toMatchObject({ redo: 1, firstPassRate: 0 })
     // An auto-closed task rejected afterwards is judged after all: it came back.
-    expect(first(`${log}2026-11-15 11:10:00 | T-105 | REJECTED | 不对\n`)).toMatchObject({ redo: 1, firstPassRate: 0.5 })
+    expect(first(`${log}2026-11-15 11:10:00 | T-105 | REJECTED | 不对\n`)).toMatchObject({ redo: 1, firstPassRate: 0.5, autoClosed: 1 })
     // Nothing judged by a person: no rate rather than 100%.
     expect(first('2026-11-15 10:30:00 | T-105 | DONE→已完成（自动验收） | commits 1\n').firstPassRate).toBeNull()
   })
 
   test('verify clauses: 怎么验 / 待验证起 / 超时预告, the last one written wins', () => {
-    const md = '## P1 — 重要\n\n| ID | 任务 | 模块 | 状态 | 依赖 | 备注 |\n|--|--|--|--|--|--|\n| T-1 | a | m | 待验证 | — | 验收：pytest x；待验证起：2026-11-01；怎么验：老步骤；打回：日期不对；待验证起：2026-11-10；怎么验：跑 `bun test a\\|b` 看 3 项通过；超时预告：2026-11-16 |\n'
+    const md = '## P1 — 重要\n\n| ID | 任务 | 模块 | 状态 | 依赖 | 备注 |\n|--|--|--|--|--|--|\n| T-1 | a | m | 待验证 | — | 验收：pytest x；待验证起：2026-11-01；怎么验：老步骤；打回：日期不对；待验证起：2026-11-10；怎么验：跑 `bun test a\\|b` 看 3 项通过；超时预告：2026-11-16 09:30 |\n'
     const t = parseBacklog(md).tasks[0]!
     expect(t).toMatchObject({ verifySince: '2026-11-10', howToVerify: '跑 `bun test a|b` 看 3 项通过', expiryNotice: '2026-11-16' })
     expect(parseBacklog(BACKLOG).tasks[2]).toMatchObject({ howToVerify: '', verifySince: '', expiryNotice: '' })
+    // A later empty 怎么验 clears the earlier one.
+    expect(parseBacklog(md.replace('；超时预告', '；怎么验：；超时预告')).tasks[0]?.howToVerify).toBe('')
   })
 
   test('the 待验证 timeout: 7 days unless backlog.md says otherwise, 0 is off; days left count local days', () => {
@@ -314,11 +318,15 @@ describe('snapshot', () => {
     expect(verifyTimeoutOf('**待验证超时：** 3 天（0 = 关闭）')).toBe(3)
     expect(verifyTimeoutOf('待验证超时: 0')).toBe(0)
     const now = new Date(2026, 10, 15, 23, 30).getTime()
-    expect(verifyExpiry({ verifySince: '2026-11-10', expiryNotice: '' }, 7, now)).toEqual({ due: '2026-11-17', left: 2, noticed: false })
-    expect(verifyExpiry({ verifySince: '2026-11-09', expiryNotice: '2026-11-15' }, 7, now)).toEqual({ due: '2026-11-16', left: 1, noticed: true })
-    expect(verifyExpiry({ verifySince: '2026-10-01', expiryNotice: '' }, 7, now)?.left).toBeLessThan(0)
-    expect(verifyExpiry({ verifySince: '2026-11-10', expiryNotice: '' }, 0, now)).toBeNull()
-    expect(verifyExpiry({ verifySince: '', expiryNotice: '' }, 7, now)).toBeNull()
+    const t = (verifySince: string, expiryNotice = '', note = '') => ({ verifySince, expiryNotice, note })
+    expect(verifyExpiry(t('2026-11-10'), 7, now)).toEqual({ due: '2026-11-17', left: 2, noticed: false, hold: false })
+    expect(verifyExpiry(t('2026-11-09', '2026-11-15'), 7, now)).toEqual({ due: '2026-11-16', left: 1, noticed: true, hold: false })
+    expect(verifyExpiry(t('2026-10-01'), 7, now)?.left).toBeLessThan(0)
+    expect(verifyExpiry(t('2026-11-10'), 0, now)).toBeNull()
+    expect(verifyExpiry(t(''), 7, now)).toBeNull()
+    // Across a month end.
+    expect(verifyExpiry(t('2026-10-28'), 7, now)?.due).toBe('2026-11-04')
+    for (const note of ['默认通过：否', '⚠ 高风险区域改动：src/auth.py', '⚠ 测试有改动：删 1 例']) expect(verifyExpiry(t('2026-11-10', '', note), 7, now)?.hold).toBe(true)
   })
 
   test('human metrics with no run.log are empty and render as —', () => {

@@ -101,7 +101,7 @@ export const VERIFY_CLAUSE = /^(怎么验|待验证起|超时预告)[：:]/
 function clauseValue(note: string, key: string): string {
   let value = ''
   for (const c of noteClauses(note)) {
-    const m = new RegExp(`^${key}[：:]\\s*(.+)$`).exec(c)
+    const m = new RegExp(`^${key}[：:]\\s*(.*)$`).exec(c)
     if (m) value = m[1]!.trim()
   }
   return value
@@ -118,11 +118,14 @@ export function verifyTimeoutOf(md: string): number {
   return m ? Number(m[1]) : DEFAULT_VERIFY_TIMEOUT_DAYS
 }
 
+/** Marks that keep a 待验证 task from passing by default (VERIFY.md §3.2). */
+export const VERIFY_HOLD = /默认通过[：:]\s*否|⚠\s*高风险区域改动|⚠\s*测试有改动/
+
 /**
  * Where a 待验证 task stands against the timeout, in whole local days from `verifySince`:
  * `left` days until it passes by default (≤ 0: due at the next check). null when off or the day is unknown.
  */
-export function verifyExpiry(task: Pick<Task, 'verifySince' | 'expiryNotice'>, timeoutDays: number, now: number): { due: string; left: number; noticed: boolean } | null {
+export function verifyExpiry(task: Pick<Task, 'verifySince' | 'expiryNotice' | 'note'>, timeoutDays: number, now: number): { due: string; left: number; noticed: boolean; hold: boolean } | null {
   if (timeoutDays <= 0 || !task.verifySince) return null
   const [y, m, d] = task.verifySince.split('-').map(Number) as [number, number, number]
   const since = new Date(y, m - 1, d)
@@ -133,7 +136,7 @@ export function verifyExpiry(task: Pick<Task, 'verifySince' | 'expiryNotice'>, t
   const pad = (n: number) => String(n).padStart(2, '0')
   const due = `${dueDate.getFullYear()}-${pad(dueDate.getMonth() + 1)}-${pad(dueDate.getDate())}`
   const left = Math.round((dueDate.getTime() - todayStart.getTime()) / DAY_MS)
-  return { due, left, noticed: task.expiryNotice !== '' }
+  return { due, left, noticed: task.expiryNotice !== '', hold: VERIFY_HOLD.test(task.note) }
 }
 
 export type Backlog = { tasks: Task[]; decisions: Decision[]; humanBlocks: HumanBlock[] }
@@ -372,15 +375,17 @@ export function metricsOf(tasks: Task[], archive: Archive, events: LogEvent[], n
   for (const id of redone) if (!delivered.has(id)) redone.delete(id)
   // Closed with nobody looking (auto-accepted on delivery, or passed by the 待验证 timeout): no evidence it
   // passed a person, so it leaves first pass unless it came back anyway.
+  // Per task, like first pass; a task rejected after it closed is open again and not counted.
   const unattended = new Set<string>()
-  let autoClosed = 0
+  const closedNow = new Set<string>()
   for (const e of events) {
     if (!/^T-\d+$/.test(e.subject)) continue
     if (e.event === 'TIMEOUT_PASS' || /^DONE[^→]*→\s*已完成/.test(e.event)) {
       unattended.add(e.subject)
-      autoClosed++
-    }
+      closedNow.add(e.subject)
+    } else if (e.event === 'REJECTED') closedNow.delete(e.subject)
   }
+  const autoClosed = closedNow.size
   const judged = [...delivered].filter(id => redone.has(id) || !unattended.has(id)).length
 
   const cycles: number[] = []

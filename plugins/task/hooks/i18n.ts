@@ -70,6 +70,7 @@ const zh = {
   noHowToVerify: '未写验证步骤，按验收标准确认',
   pair: (k: string, v: string) => `${k}：${v}`,
   /** A 待验证 task against the timeout: days left, the due day, whether the dispatcher has warned. */
+  hold: '需你亲自看，不会默认通过',
   expiry: (left: number, due: string, noticed: boolean) =>
     left > 1 ? `${left} 天后默认通过（${due.slice(5)}）` : left === 1 ? `明天默认通过（${due.slice(5)}）${noticed ? '，已预告' : ''}` : `已到期，下次检查时默认通过${noticed ? '' : '（先预告一天）'}`,
   agentRunning: '运行中',
@@ -158,6 +159,7 @@ const en: Strings = {
   noNote: 'No notes',
   noHowToVerify: 'No steps given; check against the acceptance',
   pair: (k, v) => `${k}: ${v}`,
+  hold: 'needs your own look; no default pass',
   expiry: (left, due, noticed) =>
     left > 1 ? `passes by default in ${left} days (${due.slice(5)})` : left === 1 ? `passes by default tomorrow (${due.slice(5)})${noticed ? ', warned' : ''}` : `due; passes at the next check${noticed ? '' : ' (after a day\'s warning)'}`,
   agentRunning: 'running',

@@ -278,7 +278,7 @@ function reportText(snap: Snapshot, agentList: AgentRow[], busy: Busy, now: numb
     out.push(`  ${t.priority || '—'} ${t.id} [${statusLabel(L, t.status, t.statusLabel)}] ${t.title}${t.deps && t.deps !== '—' ? `  (${L.deps(t.deps)})` : ''}`)
     if (t.status !== '待验证') continue
     const expiry = verifyExpiry(t, snap.verifyTimeoutDays, now)
-    const parts = [t.howToVerify ? L.pair(L.fields.howToVerify, t.howToVerify) : null, expiry ? L.expiry(expiry.left, expiry.due, expiry.noticed) : null].filter(Boolean)
+    const parts = [t.howToVerify ? L.pair(L.fields.howToVerify, t.howToVerify) : null, expiry ? (expiry.hold ? L.hold : L.expiry(expiry.left, expiry.due, expiry.noticed)) : null].filter(Boolean)
     if (parts.length) out.push(`      ${parts.join(' · ')}`)
   }
   if (shown.length < tasks.length) out.push(`  ${L.more(tasks.length - shown.length)}`)
@@ -676,7 +676,7 @@ function TaskDetail({ els, task, isCurrent, cols, expiry }: { els: Els; task: Ta
   if (task.acceptance) fields.push({ name: 'acceptance', label: F.acceptance, lines: [task.acceptance] })
   if (task.status === '待验证') {
     fields.push({ name: 'howToVerify', label: F.howToVerify, lines: [task.howToVerify || L.noHowToVerify], dim: !task.howToVerify })
-    if (expiry) fields.push({ name: 'expiry', label: F.expiry, lines: [L.expiry(expiry.left, expiry.due, expiry.noticed)] })
+    if (expiry) fields.push({ name: 'expiry', label: F.expiry, lines: [(expiry.hold ? L.hold : L.expiry(expiry.left, expiry.due, expiry.noticed))] })
   }
   const notes = noteLines(task)
   fields.push({ name: 'note', label: F.note, lines: notes.length ? notes : [L.noNote], dim: true })
