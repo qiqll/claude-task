@@ -70,7 +70,7 @@ argument-hint: "[max=N 最多任务数，默认 10] [hours=N 最长时长，默�
    - 处理完的文件移到 `.claude/inbox/.merged/`。有改动就 commit `docs(task): 合并投递 <ID 列表>`（带 `dev-progress.md`，若归档 / 重开改了它）。
    - **待验证到期检查**：按 VERIFY §3（当天做过就跳过）。预告的、关闭的在本回合输出里各列一行。
 4. **挑任务**，规则同 `${CLAUDE_PLUGIN_ROOT}/skills/next/SKILL.md` Step 1（Read 它），额外：
-   - 跳过 `待决策` / `阻塞` / `待验证` / `已完成`，以及备注含「AI 衍生 P3，只录不做」或「自动失败×2」的。
+   - 跳过 `待决策` / `阻塞` / `待验证` / `已完成`，以及「自动失败×2」的、**仍在 P3 表里**且备注含「AI 衍生 P3，只录不做」的。需求方已把它挪到 P0–P2 表（提级）却忘了删这句时，照常派发，开工登记时顺手把这句删掉。
    - `dev-plan.md` 当前批次里标「需需求方定 / 先不排」的任务 → 不派发，挪进「待决策」表（问题从 dev-plan 理由里抄），按「通知需求方」发通知（去重键 `T-0NN:待决策:plan`），然后继续挑。
    - P0 永远最先。无可做任务 → 转 D。
 5. **开工登记**：任务状态改 `进行中`；`dev-plan.md`「进行中任务」填 ID / 开工时间 / 阶段「自动 worker 实施中」；commit `docs(task): T-0NN 自动开工`。**此后**取 `start_sha=$(git rev-parse HEAD)`、`dirty`、`nonce=$(openssl rand -hex 4)`。
@@ -101,6 +101,8 @@ argument-hint: "[max=N 最多任务数，默认 10] [hours=N 最长时长，默�
 | 测试没改弱 | `bash $SK/check_test_weakening.sh <start>` | 退出码 2 → 当作有疑点；WARN 条目在 `TEST_CHANGES` 里都有理由 → 照常，备注加「⚠ 测试有改动：…」；有未说明的 → 待决策「测试改动需确认」 |
 | 高风险区域 | 改动路径命中 `migration\|alembic\|/models/\|auth\|security\|crypto\|secret\|billing\|quota\|pricing\|Dockerfile\|docker-compose\|nginx\|\.github/\|requirements.*\.txt`；`package.json` / `pyproject.toml` 只在 diff 触及依赖段（`dependencies` / `devDependencies` / `peerDependencies` / `[project.dependencies]` / `[tool.poetry.*dependencies]`）或 lock 文件变化时才算命中（只加 npm script 不算） | **一律**在备注加「⚠ 高风险区域改动：<路径>」；`ASSUMPTIONS` 不是 `—` → 待决策「高风险区域内的自选方案需确认」（commit 保留） |
 
+**未修的 High / Critical**：报告 `DERIVED` 里有任何一条 `级别` 是 High / Critical（安全的和一般的都算），就不判自动验收，结论直接 `待验证`，备注加 `默认通过：否；⚠ 遗留未修 High/Critical：<条目一句话>`。这类问题必须由人看过，不能靠超时关掉。
+
 全过 → 先按 VERIFY §2 判自动验收：命中 → 结论 `已完成`（关闭方式 `自动验收（规则 a|b）`）；否则结论 `待验证`。两种都在备注追加「自动交付（日期）：commits …；验收：…；假设：…」；进待验证的再按 VERIFY §1 写 `待验证起` 与 `怎么验`（取报告 `VERIFY`，为 `—` 时写「怎么验：按验收标准」）。
 
 **C2. 其他结果：**
@@ -109,7 +111,7 @@ argument-hint: "[max=N 最多任务数，默认 10] [hours=N 最长时长，默�
 |--------|------|
 | `NEEDS_DECISION` | 结论 `待决策`，`DECISION` 原文写进待决策表 |
 | `BLOCKED` | 结论 `阻塞`，依赖列写原因；需人工操作的在「人工阻塞事项」开 `H-NNN` |
-| `BASELINE_RED` | 结论 `阻塞`（基线红：用例名）；把「修复基线 <用例>」作为衍生任务按 C3 录入（同样 P3 只录不做，除非属于 C3 的安全例外；计 1 层衍生），本任务依赖列写这条衍生任务的 ID。需求方提级之前，本任务会一直阻塞。noprog+1 |
+| `BASELINE_RED` | 结论 `阻塞`（基线红：用例名）；把「修复基线 <用例>」按 C3 录入：P3 只录不做；不受层级上限约束，但仍要查重，命中已有条目时用那条的 ID。本任务的依赖列写这个 ID。然后挂待决策「基线红：<用例>，修复任务 T-x 是否提级」，按「通知需求方」发通知（去重键 `BASELINE:T-x`）。**不计 noprog**：同一个红基线连续卡住几个任务，原因只有一个，等需求方拍板即可，不该因此停机 |
 | `FAILED` / 超时 / 停滞 / 无报告 | **先分辨是不是基础设施中断**：worker 以 API 错误 / 连接重置 / 限流等 `failureReason` 停下且没交报告 → 不算任务失败：核对 `<start>..HEAD` 与遗留文件后，删掉 current 的 `nudged` / `watch_ok` 行，用 SendMessage 让同一个 worker 从断点续做（同一 nonce），每个任务最多续 2 次，`phase` 保持 `running`；第 3 次仍中断才按 FAILED 处理。其余情况见下方「回滚」。备注追加「自动失败×N：原因」；N≥2 → `阻塞`，否则回 `待开始`（下次派发带上失败原因）。noprog+1 |
 | `GATE_PENDING_REVIEW` | worker 派不了子 agent：写 `phase=review_pending`，你派 `code-reviewer`（没有该 agent 时用 `general-purpose` 子 agent 做只读审查）审 `<start>..HEAD`，把发现用 SendMessage 发给 `worker-T-0NN`，让它按 /task:auto Step 4 第 2 步继续并重新返回报告（同一 nonce）。结束回合等通知 |
 
@@ -122,7 +124,7 @@ argument-hint: "[max=N 最多任务数，默认 10] [hours=N 最长时长，默�
 - 层级 = 父任务备注里的「衍生层级」+1（无则父为 0）。**层级 > 2 不录**，只在简报里提一句。
 - 每个父任务最多录 3 条；先和 backlog 查重（同文件 + 同类问题），重复的追加到已有条目备注。
 - **优先级一律 P3**，备注「AI 衍生 P3，只录不做」：不排队、不派发。需求方想做时自己改优先级、删掉这句就行。worker 建议的优先级忽略。
-- **唯一例外：审查判定的 High / Critical 安全问题**。条件是条目的 `级别` 为 `安全 High` 或 `安全 Critical`，**并且** `来源` 是某条审查发现的编号（如 `security-analyst H2`、`review C1`）。这类任务正常排队，优先级取 worker 建议，但不得高于父任务；备注加「安全衍生（High|Critical），排队」。没有审查编号的（worker 自己评的、同类缺陷推断出来的）一律按 P3 录。
+- **唯一例外：审查判定的 High / Critical 安全问题**。条件是条目的 `级别` 为 `安全 High` 或 `安全 Critical`，`来源` 是某条审查发现的编号（如 `security-analyst H2`、`review C1`），**并且**条目带了 `审查原文`，原文里写明了这个级别、问题也属于安全类。三条有一条对不上，就按 P3 录，并在简报里说明为什么不按例外处理。这类任务正常排队，优先级取 worker 建议，但不得高于父任务；备注加「安全衍生（High|Critical），排队」。没有审查编号的（worker 自己评的、同类缺陷推断出来的）一律按 P3 录。
 - 备注写「来源：衍生自 T-0NN（第 N 层）；衍生层级：N；验收：…」。状态 `待开始`。
 
 **C4. 落盘**（顺序不可换）：

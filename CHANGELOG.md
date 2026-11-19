@@ -4,7 +4,7 @@ All notable changes to the `task` plugin. Versions follow [semver](https://semve
 
 ## 0.3.13 — 2026-11-19
 
-- Derived tasks are now always recorded as P3 「AI 衍生 P3，只录不做」 and are never dispatched; raise the priority yourself to have one done. The only exception is a security issue a reviewer rated High or Critical: the worker's `DERIVED` line now carries `级别 安全 High|安全 Critical|一般`, and a task is queued as before (no higher than its parent) only when it is marked as a security High/Critical issue and its source is a reviewer finding ID. A baseline repair after `BASELINE_RED` follows the same rule, so the blocked task waits until you raise that repair task's priority.
+- Derived tasks are now always recorded as P3 「AI 衍生 P3，只录不做」 and are never dispatched; raise the priority yourself to have one done. The only exception is a security issue a reviewer rated High or Critical: the worker's `DERIVED` line now carries `级别 安全 High|安全 Critical|一般`, and a task is queued as before (no higher than its parent) only when it is marked as a security High/Critical issue and its source is a reviewer finding ID. A baseline repair after `BASELINE_RED` follows the same rule, so the blocked task waits until you raise that repair task's priority; the loop asks you in 待决策 and notifies you, and a red baseline no longer counts toward the no-progress stop. A security exception needs the reviewer's own wording in the report. A delivery that leaves any High / Critical finding unfixed (security or not) is never auto-accepted or passed by timeout. A derived task you move out of the P3 table is dispatched even if its 只录不做 note is still there.
 
 ## 0.3.12 — 2026-11-19
 
