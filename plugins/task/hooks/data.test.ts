@@ -326,6 +326,12 @@ describe('snapshot', () => {
     const tasks = parseBacklog(md).tasks
     expect(tasks.map(t => t.signTier)).toEqual([3, null, null, 2, 1])
     expect(verifyOrder(tasks).map(t => t.id)).toEqual(['T-005', 'T-002', 'T-004', 'T-003', 'T-001'])
+    // Same tier: the longest waiting first, no start day last.
+    const md2 = md.replace("row('T-003', '待验证', '—')", '') + '\n' + [
+      row('T-006', '待验证', '后续迹象：无；待验证起：2026-11-10'),
+      row('T-007', '待验证', '后续迹象：无；待验证起：2026-11-01'),
+    ].join('\n')
+    expect(verifyOrder(parseBacklog(md2).tasks).filter(t => t.signTier === 2).map(t => t.id)).toEqual(['T-007', 'T-006', 'T-004'])
   })
 
   test('the 待验证 timeout: 7 days unless backlog.md says otherwise, 0 is off; days left count local days', () => {
