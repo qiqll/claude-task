@@ -42,7 +42,7 @@ inbox="$root/.claude/inbox"; auto="$root/.claude/auto"
 mkdir -p "$inbox" "$auto"
 
 # 循环是否跑在本工作区？不是的话，提示哪个 worktree 里有在跑的循环（backlog.md 入库，每个 worktree 都有，容易投错）
-running() { [[ -f "$1/.claude/auto/run.log" ]] && ! tail -n 1 "$1/.claude/auto/run.log" | grep -q '| STOP |'; }
+running() { [[ -f "$1/.claude/auto/run.log" ]] && grep -E '\| (START|STOP) \|' "$1/.claude/auto/run.log" | tail -n 1 | grep -q '| START |'; }
 if ! running "$root"; then
   others=""
   while IFS= read -r line; do
@@ -94,16 +94,29 @@ if [[ "$action" == "pass" ]]; then
       id=$2; st=$5; gsub(/[[:space:]`]/, "", id); gsub(/[[:space:]`]/, "", st)
       if (st ~ /^待验证/) print id
     }' "$root/.claude/backlog.md")"
-  ids="$(printf '%s\n' "$*" | tr ' ' '\n' | norm_ids)"
-  [[ -n "$ids" ]] || ids="$pending"
+  # 选项可以写在 ID 后面：qtask --pass T-1 T-2 --except T-2
+  args=()
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --except) need "$@"; except="$except,$2"; shift 2 ;;
+      -*) echo "--pass 后不认识的参数: $1" >&2; exit 1 ;;
+      *) args+=("$1"); shift ;;
+    esac
+  done
+  ids="$(printf '%s\n' "${args[@]+"${args[@]}"}" | tr ' ' '\n' | norm_ids)"
+  # backlog 里可能是 T-3 这种没补零的写法：比对用规范化 ID，投递用 backlog 原样 ID
+  pending_norm="$(printf '%s\n' "$pending" | norm_ids)"
+  orig_of() { paste -d' ' <(printf '%s\n' "$pending_norm") <(printf '%s\n' "$pending") | awk -v id="$1" '$1 == id { print $2; exit }'; }
+  [[ -n "$ids" ]] || ids="$pending_norm"
   skip="$(printf '%s\n' "$except" | norm_ids)"
   [[ -n "$ids" ]] || { echo "backlog 里没有待验证的任务"; exit 0; }
   n=0
   while IFS= read -r id; do
     [[ "$id" =~ ^T-[0-9]+$ ]] || { echo "跳过无效 ID: $id" >&2; continue; }
     grep -qxF "$id" <<<"$skip" && continue
-    grep -qxF "$id" <<<"$pending" || echo "⚠ $id 当前不是待验证，仍投递，调度员合并时会核对" >&2
-    write_inbox "$id" "通过（qtask --pass 批量确认）"; n=$((n+1))
+    ref_id="$(orig_of "$id")"
+    [[ -n "$ref_id" ]] || { echo "⚠ $id 当前不是待验证，仍投递，调度员合并时会核对" >&2; ref_id="$id"; }
+    write_inbox "$ref_id" "通过（qtask --pass 批量确认）"; n=$((n+1))
   done <<<"$ids"
   echo "共投递 $n 条通过确认"
   exit 0
