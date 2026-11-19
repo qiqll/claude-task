@@ -13,6 +13,8 @@ argument-hint: "[max=N 最多任务数，默认 10] [hours=N 最长时长，默�
 
 `$SK` = `${CLAUDE_PLUGIN_ROOT}/skills/loop`（含 `verify_tests.sh`、`check_test_weakening.sh`、`worker_progress.sh`、`notify.sh`）。
 
+**待验证规则**在 `$SK/VERIFY.md`（自动验收、到期默认通过、归档、打回重开），下文写「按 VERIFY §N」的地方 Read 它照做。
+
 | 文件 | 谁写 | 作用 |
 |------|------|------|
 | `.claude/backlog.md` / `dev-plan.md` / `dev-progress.md` | **只有调度员** | 任务池、排期、归档（worker 不碰） |
@@ -22,6 +24,7 @@ argument-hint: "[max=N 最多任务数，默认 10] [hours=N 最长时长，默�
 | `.claude/auto/STOP` | 需求方 / 调度员 | 存在 = 当前任务做完后停机 |
 | `.claude/auto/notified` | `notify.sh` | 已发通知的去重键（不用手动维护） |
 | `.claude/auto/dispatcher` | 插件钩子 | 调度员会话 id（不用手动维护） |
+| `.claude/auto/verify-checked` | 调度员 | 当天已做过待验证到期检查的日期 |
 
 **`current` 字段**：`task=T-0NN` `nonce=<8位随机hex>` `phase=<见下>` `start_sha=` `dirty=<开工时 git status --porcelain 的路径，逗号分隔>` `started=<epoch>` `worker=worker-T-0NN` `output=<output 文件路径>` `nudged=<看门狗催促时间 epoch，未催促则无此行>` `watch_ok=<看门狗判定正常的时间 epoch，同上>` `run_started=<本次 /task:loop 启动 epoch>` `max=` `hours=` `done=<本次已交付数>` `noprog=<连续无进展数>`。
 没有 current 时，`run_started/max/hours/done/noprog` 记在 `.claude/auto/session`（同格式），派发时拷进 current。
@@ -41,7 +44,7 @@ argument-hint: "[max=N 最多任务数，默认 10] [hours=N 最长时长，默�
    - `git status --porcelain .claude/backlog.md .claude/dev-plan.md .claude/dev-progress.md` 为空。不为空说明需求方正在手改 → 提示「请先提交或撤销你对 backlog/dev-plan 的修改（我不会替你提交草稿）」，结束。
 2. **恢复现场**（必须在任何 commit 之前）：
    - current 不存在 → 跳过。
-   - `phase=accepted` → 验收结论已定只差落盘：按 C4 补完（backlog 已含结论就只删 current + 写 run.log）。
+   - `phase=accepted` → 验收结论已定只差落盘：按 C4 补完（backlog 已含结论就只删 current + 写 run.log；结论是 `已完成` 时「已含」按 VERIFY §4 末尾判定）。
    - `phase=halted` → 上次被叫停：向需求方复述断点与半成品文件清单，问是继续这个任务（重新派发，带断点）还是放回队列。**不回滚**。
    - `phase=running`/`review_pending`/`accepting` → 若该 worker 在本会话仍在运行（ListAgents 能看到且 busy），等它；否则读 output 文件找本 nonce 的报告（见心跳），有就进 C，没有就按 `FAILED（中断）` 进 C。
    - backlog 里有 `进行中` 但没有 current → 改回 `待开始`，备注追加「自动循环接管」。
@@ -60,12 +63,13 @@ argument-hint: "[max=N 最多任务数，默认 10] [hours=N 最长时长，默�
    - `type: task` → 按 `${CLAUDE_PLUGIN_ROOT}/skills/add/SKILL.md` 的规则录入（Read 它，不要调用 /task:add）（查重、分配 ID、拆分、判优先级、写模块、备注首写「验收：…」）。`priority` 只是建议；判定不确定时不问，按后果规则定级并备注「优先级 AI 判定，可改」。
    - `type: decision`，`ref` 指向的任务：
      - 在「待决策」表 → 答复写进备注「需求方决策（日期）：…」，删表行，状态改 `待开始`；`run.log` 追加 `<时间> | T-0NN | DECIDED | <答复首句，截到 40 字>`（面板据此算决策等待时长）。
-     - 状态是 `待验证` 且答复是「通过/OK」类 → 按 `${CLAUDE_PLUGIN_ROOT}/skills/next/SKILL.md`「需求方确认后的收尾」归档；是「打回」类 → 状态 `打回`，备注追加问题，排队重做（派发时带上打回意见）；`run.log` 追加 `<时间> | T-0NN | REJECTED | <意见首句，截到 40 字>`（面板据此计人工介入）。
+     - 状态是 `待验证`，或任务已归档（backlog 无此行、`dev-progress.md` 有 `### T-0NN`）→ 按 VERIFY §5：通过类归档（关闭方式 `需求方确认`）；打回类改 `打回` / 已归档的重开，排队重做（派发时带上打回意见）；`run.log` 追加 `<时间> | T-0NN | REJECTED | <意见首句，截到 40 字>`（面板据此计人工介入）。
      - 状态是 `阻塞` → 答复写进备注，若答复表明阻塞已解除则改 `待开始`。
      - 找不到 / 无法判断 → 原文挂进「待决策」表问需求方，不猜（按「通知需求方」发通知，去重键用 inbox 文件名）。
-   - 处理完的文件移到 `.claude/inbox/.merged/`。有改动就 commit `docs(task): 合并投递 <ID 列表>`。
+   - 处理完的文件移到 `.claude/inbox/.merged/`。有改动就 commit `docs(task): 合并投递 <ID 列表>`（带 `dev-progress.md`，若归档 / 重开改了它）。
+   - **待验证到期检查**：按 VERIFY §3（当天做过就跳过）。预告的、关闭的在本回合输出里各列一行。
 4. **挑任务**，规则同 `${CLAUDE_PLUGIN_ROOT}/skills/next/SKILL.md` Step 1（Read 它），额外：
-   - 跳过 `待决策` / `阻塞` / `待验证`，以及备注含「AI 衍生 P3，只录不做」或「自动失败×2」的。
+   - 跳过 `待决策` / `阻塞` / `待验证` / `已完成`，以及备注含「AI 衍生 P3，只录不做」或「自动失败×2」的。
    - `dev-plan.md` 当前批次里标「需需求方定 / 先不排」的任务 → 不派发，挪进「待决策」表（问题从 dev-plan 理由里抄），按「通知需求方」发通知（去重键 `T-0NN:待决策:plan`），然后继续挑。
    - P0 永远最先。无可做任务 → 转 D。
 5. **开工登记**：任务状态改 `进行中`；`dev-plan.md`「进行中任务」填 ID / 开工时间 / 阶段「自动 worker 实施中」；commit `docs(task): T-0NN 自动开工`。**此后**取 `start_sha=$(git rev-parse HEAD)`、`dirty`、`nonce=$(openssl rand -hex 4)`。
@@ -96,7 +100,7 @@ argument-hint: "[max=N 最多任务数，默认 10] [hours=N 最长时长，默�
 | 测试没改弱 | `bash $SK/check_test_weakening.sh <start>` | 退出码 2 → 当作有疑点；WARN 条目在 `TEST_CHANGES` 里都有理由 → 照常，备注加「⚠ 测试有改动：…」；有未说明的 → 待决策「测试改动需确认」 |
 | 高风险区域 | 改动路径命中 `migration\|alembic\|/models/\|auth\|security\|crypto\|secret\|billing\|quota\|pricing\|Dockerfile\|docker-compose\|nginx\|\.github/\|requirements.*\.txt`；`package.json` / `pyproject.toml` 只在 diff 触及依赖段（`dependencies` / `devDependencies` / `peerDependencies` / `[project.dependencies]` / `[tool.poetry.*dependencies]`）或 lock 文件变化时才算命中（只加 npm script 不算） | **一律**在备注加「⚠ 高风险区域改动：<路径>」；`ASSUMPTIONS` 不是 `—` → 待决策「高风险区域内的自选方案需确认」（commit 保留） |
 
-全过 → 结论 `待验证`，备注追加「自动交付（日期）：commits …；验收：…；假设：…」。
+全过 → 先按 VERIFY §2 判自动验收：命中 → 结论 `已完成`（关闭方式 `自动验收（规则 a|b）`）；否则结论 `待验证`。两种都在备注追加「自动交付（日期）：commits …；验收：…；假设：…」；进待验证的再按 VERIFY §1 写 `待验证起` 与 `怎么验`（取报告 `VERIFY`，为 `—` 时写「怎么验：按验收标准」）。
 
 **C2. 其他结果：**
 
@@ -121,15 +125,15 @@ argument-hint: "[max=N 最多任务数，默认 10] [hours=N 最长时长，默�
 
 **C4. 落盘**（顺序不可换）：
 1. 写 `phase=accepted`，并把结论（最终状态 + 备注要点）写进 current 的 `verdict=` 行。
-2. 改 backlog（结论 + 衍生）、`dev-plan.md` 清空「进行中任务」并刷新「当前批次」；「最后更新」只写日期 + 本任务一句话（历史在 `run.log` / `dev-progress.md`）。commit `docs(task): T-0NN 自动交付<结果>`（只 add 这两个文件）。
-3. 更新 session：DONE→待验证 时 `done+1, noprog=0`；无进展类 `noprog+1`；其他不变。删 current。`run.log` 追加 `<时间> | T-0NN | <RESULT>→<最终状态> | commits <n> | <耗时> | 衍生 <n> | <一句话>`。
-4. 给需求方 3–6 行简报：结果、改了什么、请怎么验证（来自 `BRIEF`）；进了待决策的把问题和选项直接贴出来。
+2. 改 backlog（结论 + 衍生）、`dev-plan.md` 清空「进行中任务」并刷新「当前批次」；「最后更新」只写日期 + 本任务一句话（历史在 `run.log` / `dev-progress.md`）。结论 `已完成`（自动验收）→ 同时按 VERIFY §4 归档（删 backlog 行、写 dev-progress）。commit `docs(task): T-0NN 自动交付<结果>`（只 add backlog / dev-plan，归档时加 dev-progress）。
+3. 更新 session：DONE→待验证 或 DONE→已完成 时 `done+1, noprog=0`；无进展类 `noprog+1`；其他不变。删 current。`run.log` 追加 `<时间> | T-0NN | <RESULT>→<最终状态> | commits <n> | <耗时> | 衍生 <n> | <一句话>`（自动验收写 `DONE→已完成（自动验收）`）。
+4. 给需求方 3–6 行简报：结果、改了什么、请怎么验证（来自 `BRIEF` / `VERIFY`）；自动验收的写明「已免验关闭（规则 a|b），有问题随时 `qtask -d T-0NN 打回：…`」；进了待决策的把问题和选项直接贴出来。
 5. 最终状态是 `待决策` / `待验证` / `阻塞`，或本轮往「待决策」表加了行（遗留文件、测试改动需确认等）→ 按「通知需求方」发**一条**通知（多件事合并成一句），去重键 `T-0NN:<最终状态>:<nonce>`。
 6. 回到 B（同一回合内继续）。
 
 ## D. 空闲
 
-池里没有可派的任务：输出简短状态（待决策 N 条及问题、待验证 N 条、阻塞 N 条），说明「新投递会在 20 分钟内被心跳发现，或直接跟我说」，结束回合。心跳保持。**不要自己找活干、不要发明需求。**
+池里没有可派的任务：输出简短状态（待决策 N 条及问题、待验证 N 条（最近的默认通过日）、阻塞 N 条），说明「新投递会在 20 分钟内被心跳发现，或直接跟我说」，结束回合。心跳保持。**不要自己找活干、不要发明需求。**
 
 ## E. 停机
 
@@ -144,7 +148,7 @@ argument-hint: "[max=N 最多任务数，默认 10] [hours=N 最长时长，默�
   - `phase=running/review_pending` → 用 `grep -c "NONCE: <nonce>" <output>` 判断报告是否已产出（口令只出现在 worker 的报告里，派发 prompt 用的是「报告口令：」，模板里是占位符，不会误中）。
     - 已产出 → 从 output 提取该报告块，进 C（C0 闸门会挡掉已被处理过的）。
     - 未产出：开工 ≥ 3 小时 → TaskStop 该 worker，按 `FAILED（超时）` 进 C。否则 `phase=running` 时走下面的**看门狗**；`review_pending` 不走（worker 在等审查结果，output 本来就不动）。
-- 无 current → inbox 有新文件或池里有可派任务 → 进 B；否则静默。
+- 无 current → inbox 有新文件或池里有可派任务 → 进 B；否则按 VERIFY §3 做到期检查（当天做过就跳过），然后静默。
 - 无事发生时只输出一行。
 
 ### 看门狗：worker 还在推进吗
@@ -189,7 +193,9 @@ worker 在后台跑，你随时能接话。**不要因为需求方说话就自�
 | 需求方说 | 你做 |
 |---------|------|
 | 「加个任务：…」 | 写一个 inbox 文件（同 `qtask` 格式：frontmatter `type: task` + 正文）。worker 在跑 → 回「已投递，当前任务结束后合并」；空闲 → 立即走 B |
-| 「T-0NN 选 B / 按 X 做 / 通过 / 打回：…」 | 写 `type: decision`、`ref: T-0NN` 的 inbox 文件，同上 |
+| 「T-0NN 选 B / 按 X 做 / 通过 / 打回：…」 | 写 `type: decision`、`ref: T-0NN` 的 inbox 文件，同上；说了多个 ID 就每个 ID 一个文件 |
+| 「全部通过」/「除 T-x 外都通过」 | 按 backlog 当前的待验证列表，每个 ID 写一个「通过」的 decision 文件（同 `qtask --pass [--except …]`），同上 |
+| 「T-0NN 别默认通过」 | 写 decision 文件，合并时在备注加 `默认通过：否` |
 | 「暂停 / 这个做完就停」 | `touch .claude/auto/STOP` |
 | 「立刻停」 | TaskStop 当前 worker；写 `phase=halted`，并在 current 追加 `halt_note=<git log start..HEAD 的提交 + git status 里相对 dirty 新增的半成品文件>`；commit 保留不回滚；任务状态保持 `进行中`、dev-plan 记断点；转 E |
 | 「进度 / 状态」 | 当前 worker + `run.log` 最近 10 行 + 待决策/待验证/阻塞计数，必要时调 `/task:status` |

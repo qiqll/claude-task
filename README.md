@@ -100,6 +100,13 @@ Then update the task plugin from the `/plugin` menu (or run `claude plugin updat
 
 States: `To do → In progress → To verify → Done`, with side states `Blocked` / `Decision` / `Rejected`. A task's finished state is "to verify"; it's archived only after you confirm.
 
+### "To verify" doesn't pile up
+
+- **Closed without review**: a task that passes machine acceptance and only touched tests, or was tagged `验收方式：自动` (auto acceptance) when it was added, is archived straight away and skips "to verify". The tag is for P2 / P3 only, and only when commands can fully judge the result and nothing a user sees changes.
+- **Default pass on timeout**: a task left in "to verify" for 7 days with no rejection passes by default and is archived. All tasks due the next day are announced in one notification the day before. Set the number of days on the `**待验证超时：**` line of the backlog; `0` turns this off. Older tasks get their start date from their commits on the first check, and are also announced before they close. Changes in high-risk areas, changes to tests, and tasks whose note says `默认通过：否` (no default pass) never pass by default.
+- **Reject any time**: `qtask -d T-0NN "打回：…"` reopens a task even after it's archived. The archive records how each task was closed: by you, by auto acceptance, or by timeout. The pane's "Auto-closed" tile counts tasks nobody looked at, and they're left out of the first-pass rate.
+- **Cheap to confirm**: every task in "to verify" has a "how to verify" note (≤3 steps, a command or URL first), shown in the pane card and in `/task:status`. To confirm in bulk, use `qtask --pass` (all), `qtask --pass --except T-x`, or `qtask -d T-1,T-2 通过`.
+
 `/task:loop` needs a git repo (it records the starting SHA and accepts by commit). `/task:next` commits too, so it also needs one; only `/task:add` and `/task:status` work without git. Don't upgrade the plugin while a loop is running: skill paths include the version number, so an upgrade makes the running loop lose its scripts.
 
 ### qtask (optional)
@@ -111,7 +118,7 @@ curl -fsSL https://raw.githubusercontent.com/qiqll/claude-task/main/plugins/task
 qtask -h
 ```
 
-You can skip it: saying "add a task: …" or "T-0NN pick A" in the dispatcher session does the same thing.
+You can skip it: saying "add a task: …", "T-0NN pick A" or "pass all but T-0NN" in the dispatcher session does the same thing.
 
 ### Notifications
 
