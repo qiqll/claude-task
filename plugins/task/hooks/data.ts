@@ -95,7 +95,23 @@ function derivedFromOf(note: string): string {
 }
 
 /** Note clauses the verify fields show (怎么验 / 待验证起 / 超时预告), so the note need not repeat them. */
-export const VERIFY_CLAUSE = /^(怎么验|待验证起|超时预告)[：:]/
+export const VERIFY_CLAUSE = /^(怎么验|待验证起|超时预告|后续迹象)[：:]/
+
+/** `后续迹象：✓ …` → 3, `…建议先看` → 1, any other value → 2; no clause → null. */
+export function signTierOf(signs: string): 1 | 2 | 3 | null {
+  if (!signs) return null
+  if (signs.startsWith('✓')) return 3
+  return /先看/.test(signs) ? 1 : 2
+}
+
+/** 待验证 rows in the order to check them: look-first, no sign, unchecked, then ✓; others keep their place relative to each other. */
+export function verifyOrder(tasks: Task[]): Task[] {
+  const rank = (t: Task) => (t.signTier === 1 ? 0 : t.signTier === 2 ? 1 : t.signTier === null ? 2 : 3)
+  const verify = tasks.filter(t => t.status === '待验证')
+  const sorted = verify.map((t, i) => ({ t, i })).sort((a, b) => rank(a.t) - rank(b.t) || a.i - b.i).map(x => x.t)
+  let k = 0
+  return tasks.map(t => (t.status === '待验证' ? sorted[k++]! : t))
+}
 
 /** The last clause of the note starting with `key：`, its value; '' when none. The last wins: a redelivery restates it. */
 function clauseValue(note: string, key: string): string {
@@ -184,6 +200,8 @@ export function parseBacklog(md: string): Backlog {
         howToVerify: clauseValue(note, '怎么验'),
         verifySince: dayOf(clauseValue(note, '待验证起')),
         expiryNotice: dayOf(clauseValue(note, '超时预告')),
+        signs: clauseValue(note, '后续迹象'),
+        signTier: signTierOf(clauseValue(note, '后续迹象')),
       })
     } else if (section === 'decision' && /^T-\d+/.test(id)) {
       decisions.push({ task: taskIdIn(id) ?? id, question: cells[1] ?? '', options: cells[2] ?? '', since: cells[3] ?? '' })

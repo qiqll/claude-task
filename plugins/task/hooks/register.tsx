@@ -12,6 +12,7 @@ import {
   loopStatusOf,
   noteClauses,
   VERIFY_CLAUSE,
+  verifyOrder,
   verifyExpiry,
   parseCurrent,
   parseRunLog,
@@ -271,7 +272,7 @@ function reportText(snap: Snapshot, agentList: AgentRow[], busy: Busy, now: numb
   )
   const open = snap.tasks.filter(t => t.status !== '已完成' && t.status !== '已取消')
   const order = (t: Task) => { const i = ['进行中', '打回', '待决策', '阻塞', '待验证', '待开始'].indexOf(t.status); return i < 0 ? 9 : i }
-  const tasks = [...open].sort((a, b) => order(a) - order(b))
+  const tasks = verifyOrder([...open].sort((a, b) => order(a) - order(b)))
   const shown = all ? tasks : tasks.slice(0, REPORT_TASKS)
   out.push('', `■ ${L.tasks} ${L.count(open.length)}`)
   for (const t of shown) {
@@ -677,6 +678,7 @@ function TaskDetail({ els, task, isCurrent, cols, expiry }: { els: Els; task: Ta
   if (task.status === '待验证') {
     fields.push({ name: 'howToVerify', label: F.howToVerify, lines: [task.howToVerify || L.noHowToVerify], dim: !task.howToVerify })
     if (expiry) fields.push({ name: 'expiry', label: F.expiry, lines: [(expiry.hold ? L.hold : L.expiry(expiry.left, expiry.due, expiry.noticed))] })
+    if (task.signs) fields.push({ name: 'signs', label: F.signs, lines: [task.signs], dim: task.signTier === 2 })
   }
   const notes = noteLines(task)
   fields.push({ name: 'note', label: F.note, lines: notes.length ? notes : [L.noNote], dim: true })
@@ -810,7 +812,7 @@ async function drawPane($: EngineInterface, els: Els, cols: number) {
   const agentList = namedAgents(allAgents)
   const active = FILTERS.find(f => f.key === filterKey) ?? FILTERS[0]!
   const tile = tileWidth(cols, Object.values(L.stats))
-  const shown = snap.tasks.filter(active.match)
+  const shown = verifyOrder(snap.tasks.filter(active.match))
   const sessionText = s
     ? [
         L.delivered(s.done, s.max),

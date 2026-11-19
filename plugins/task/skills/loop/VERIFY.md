@@ -52,7 +52,12 @@
    - 有：至少一个满足 `git merge-base --is-ancestor <sha> HEAD`，且 `git log -1 --format=%h --grep='This reverts commit <完整 sha>'` 为空 → 证据「提交在当前分支」，关闭。
    - 有但全都不可达或已被 revert → 不关闭，挂待决策「T-0NN 的交付提交已不在当前分支或已被 revert」，选项：A. 打回重做（推荐）；B. 取消；C. 仍按通过关闭。
    - 关闭 = 按第 4 节归档，关闭方式 `超时默认通过（d 天无人打回）`；起始日是推断的再加 `· 存量`；证据写进记录。`run.log` 追加 `<时间> | T-0NN | TIMEOUT_PASS | 待验证 d 天`。
-5. **通知与提交**：预告列表非空 → 发**一条**通知（去重键 `VERIFY-DUE:<今天>`）：`N 条待验证明天默认通过：T-1 T-2…，有问题 qtask -d T-x 打回：原因`。通知发没发出去（SKIP / FAIL / 关闭）都不影响：预告也写进本次输出，面板任务卡片上能看到到期日。有改动就 commit `docs(task): 待验证到期检查 预告 <ID…> 关闭 <ID…>`，只 add backlog / dev-progress（以及待决策改动所在的 backlog）。
+5. **排序（只影响先看哪条，不影响关不关）**：对预告列表里每个任务跑 `bash ${CLAUDE_PLUGIN_ROOT}/skills/loop/verify_signals.sh <项目根> T-0NN`（只读，纯 git 机械判定），按 `TIER` 写备注子句（覆盖旧的同名子句；用「、」分隔，不用 ` · `）：
+   - `TIER 1` → `后续迹象：无，用户可见改动，建议先看`（`VISIBLE unknown` 时写「无，查不到交付提交，建议先看」）
+   - `TIER 2` → `后续迹象：无`
+   - `TIER 3` → `后续迹象：✓ <LATER 里的 ID> 后来改过同批文件、<DOWNSTREAM 里的 ID> 依赖它已交付`（没有的那半句省掉）
+   预告列表按 TIER 1 → 2 → 3 排，同档按已挂天数从多到少。
+6. **通知与提交**：预告列表非空 → 发**一条**通知（去重键 `VERIFY-DUE:<今天>`）：`N 条待验证明天默认通过，先看 T-1 T-2（无使用迹象），其余 T-5✓ T-6✓…，有问题 qtask -d T-x 打回：原因`（≤100 字放不下就只列先看的，其余写「等 N 条」）。本次输出里按同样顺序逐条列出 ID、标题、`怎么验`、迹象。通知发没发出去（SKIP / FAIL / 关闭）都不影响：预告也写进本次输出，面板任务卡片上能看到到期日。有改动就 commit `docs(task): 待验证到期检查 预告 <ID…> 关闭 <ID…>`，只 add backlog / dev-progress（以及待决策改动所在的 backlog）。
 
 ## 4. 归档（所有关闭方式共用）
 

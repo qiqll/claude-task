@@ -17,6 +17,10 @@ export type Task = {
   verifySince: string
   /** `超时预告：YYYY-MM-DD` — the day the dispatcher warned it would pass by default; '' when not warned. */
   expiryNotice: string
+  /** `后续迹象：…` as the expiry check wrote it; '' when not checked yet. */
+  signs: string
+  /** From `signs`: 1 = no sign of use and user-visible (look first), 2 = no sign, 3 = signs of use (✓); null when not checked. */
+  signTier: 1 | 2 | 3 | null
 }
 
 export type Decision = { task: string; question: string; options: string; since: string }

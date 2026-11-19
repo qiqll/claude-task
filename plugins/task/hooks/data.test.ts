@@ -21,6 +21,7 @@ import {
   splitRow,
   transitions,
   verifyExpiry,
+  verifyOrder,
   verifyTimeoutOf,
   wrapCells,
 } from './data'
@@ -311,6 +312,20 @@ describe('snapshot', () => {
     expect(parseBacklog(BACKLOG).tasks[2]).toMatchObject({ howToVerify: '', verifySince: '', expiryNotice: '' })
     // A later empty 怎么验 clears the earlier one.
     expect(parseBacklog(md.replace('；超时预告', '；怎么验：；超时预告')).tasks[0]?.howToVerify).toBe('')
+  })
+
+  test('后续迹象 ranks 待验证 rows: look first, no sign, unchecked, ✓ last; other rows keep their places', () => {
+    const row = (id: string, status: string, note: string) => `| ${id} | t | m | ${status} | — | ${note} |`
+    const md = ['## P1 — 重要', '', '| ID | 任务 | 模块 | 状态 | 依赖 | 备注 |', '|--|--|--|--|--|--|',
+      row('T-001', '待验证', '后续迹象：✓ T-009 后来改过同批文件'),
+      row('T-002', '进行中', '—'),
+      row('T-003', '待验证', '—'),
+      row('T-004', '待验证', '后续迹象：无'),
+      row('T-005', '待验证', '后续迹象：无，用户可见改动，建议先看'),
+    ].join('\n')
+    const tasks = parseBacklog(md).tasks
+    expect(tasks.map(t => t.signTier)).toEqual([3, null, null, 2, 1])
+    expect(verifyOrder(tasks).map(t => t.id)).toEqual(['T-005', 'T-002', 'T-004', 'T-003', 'T-001'])
   })
 
   test('the 待验证 timeout: 7 days unless backlog.md says otherwise, 0 is off; days left count local days', () => {
