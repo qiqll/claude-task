@@ -875,7 +875,7 @@ test('the guard covers MCP file tools, follows the session that ran /task:loop, 
 test('a 待验证 card shows how to verify and when it passes by default; those clauses leave the note', async ($, on) => {
   const backlog = BACKLOG.replace(
     '| T-107 | 日期炸弹改相对时间 | 测试 | 待验证 | T-071 | 来源：衍生自 T-104（第 1 层）；验收：用例不依赖当天 |',
-    '| T-107 | 日期炸弹改相对时间 | 测试 | 待验证 | T-071 | 来源：衍生自 T-104（第 1 层）；验收：用例不依赖当天；待验证起：2026-11-10；怎么验：改系统日期后跑 `bun test` |',
+    '| T-107 | 日期炸弹改相对时间 | 测试 | 待验证 | T-071 | 来源：衍生自 T-104（第 1 层）；验收：用例不依赖当天；待验证起：2026-11-10；怎么验：改系统日期后跑 `bun test`；后续迹象：✓ T-111 后来改过同批文件 |',
   )
   expect(backlog).not.toBe(BACKLOG)
   const files: Record<string, string> = { ...FILES, '/proj/.claude/backlog.md': backlog }
@@ -898,6 +898,8 @@ test('a 待验证 card shows how to verify and when it passes by default; those 
   const note = (await ui.find({ key: 'field:T-107:note' }))?.text ?? ''
   expect(note).not.toContain('怎么验')
   expect(note).not.toContain('待验证起')
+  expect((await ui.find({ key: 'field:T-107:signs' }))?.text).toContain('✓ T-111')
+  expect(note).not.toContain('后续迹象')
   // A task not in 待验证 has no such fields.
   await ui.press({ key: 'task:T-111' })
   expect(await ui.find({ key: 'field:T-111:howToVerify' })).toBeUndefined()

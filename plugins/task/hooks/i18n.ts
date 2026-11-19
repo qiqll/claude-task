@@ -65,7 +65,7 @@ const zh = {
   halt: (n: string) => `断点：${n}`,
   deps: (d: string) => `依赖 ${d}`,
   /** Field labels of an expanded task row. */
-  fields: { module: '模块', deps: '依赖', derivedFrom: '衍生自', acceptance: '验收', howToVerify: '怎么验', expiry: '到期', note: '备注' },
+  fields: { module: '模块', deps: '依赖', derivedFrom: '衍生自', acceptance: '验收', howToVerify: '怎么验', expiry: '到期', signs: '迹象', note: '备注' },
   noNote: '无备注',
   noHowToVerify: '未写验证步骤，按验收标准确认',
   pair: (k: string, v: string) => `${k}：${v}`,
@@ -155,7 +155,7 @@ const en: Strings = {
   noTitle: '(title not found in backlog)',
   halt: n => `Breakpoint: ${n}`,
   deps: d => `depends on ${d}`,
-  fields: { module: 'Module', deps: 'Depends', derivedFrom: 'Derived from', acceptance: 'Acceptance', howToVerify: 'How to verify', expiry: 'Due', note: 'Notes' },
+  fields: { module: 'Module', deps: 'Depends', derivedFrom: 'Derived from', acceptance: 'Acceptance', howToVerify: 'How to verify', expiry: 'Due', signs: 'Signs of use', note: 'Notes' },
   noNote: 'No notes',
   noHowToVerify: 'No steps given; check against the acceptance',
   pair: (k, v) => `${k}: ${v}`,
