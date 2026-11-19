@@ -4,22 +4,26 @@
 #
 #   qtask "需求描述"                 投递新任务（优先级由调度员判定）
 #   qtask -p P1 "需求描述"           投递新任务，附优先级建议
-#   qtask -d T-111 "选方案 B，理由…"  回答「待决策」里的问题
+#   qtask -d T-111 "选方案 B，理由…"  回答「待决策」里的问题（-d T-1,T-2 "通过" 一次答多个）
+#   qtask --pass [T-1 T-2 …]         确认待验证通过（不写 ID = 当前所有待验证）
+#   qtask --pass --except T-3,T-4    除指定的外，所有待验证都通过
 #   qtask --stop                     当前任务做完后停机
 #   qtask --resume                   撤销停机信号
 #   qtask --ls                       查看未合并的投递 + 最近运行日志
 #   qtask -C <目录> ...              指定项目（默认当前目录所在 git 工作区，worktree 亦可）
 set -euo pipefail
 
-usage() { sed -n '2,11p' "$0" | sed 's/^# \{0,1\}//'; exit "${1:-0}"; }
+usage() { sed -n '2,13p' "$0" | sed 's/^# \{0,1\}//'; exit "${1:-0}"; }
 
 need() { [[ $# -ge 2 && -n "$2" ]] || { echo "$1 需要参数" >&2; exit 1; }; }
-dir="$PWD"; type="task"; priority=""; ref=""; action="add"
+dir="$PWD"; type="task"; priority=""; ref=""; action="add"; except=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
     -C) need "$@"; dir="$2"; shift 2 ;;
     -p) need "$@"; priority="$2"; shift 2 ;;
     -d) need "$@"; type="decision"; ref="$2"; shift 2 ;;
+    --pass) action="pass"; type="decision"; shift ;;
+    --except) need "$@"; except="$except,$2"; shift 2 ;;
     --stop) action="stop"; shift ;;
     --resume) action="resume"; shift ;;
     --ls) action="ls"; shift ;;
@@ -61,25 +65,65 @@ case "$action" in
     exit 0 ;;
 esac
 
+# 一个答复一个文件：调度员按 ref 逐个合并
+write_inbox() { # $1=ref  $2=body
+  local name tmp
+  name="$(date '+%Y%m%d-%H%M%S')-$$-$RANDOM.md"
+  tmp="$inbox/.tmp-$name"
+  {
+    echo "---"
+    echo "type: $type"
+    [[ -n "$priority" ]] && echo "priority: $priority"
+    [[ -n "$1" ]] && echo "ref: $1"
+    echo "created: $(date '+%F %T')"
+    echo "---"
+    printf '%s\n' "$2"
+  } > "$tmp"
+  mv "$tmp" "$inbox/$name"
+  echo "已投递 [$type${1:+ $1}${priority:+ $priority}] → .claude/inbox/$name"
+}
+
+# 逗号 / 中文逗号分隔；t-7 → T-007（补零到 3 位，与 backlog ID 对得上）
+norm_ids() { sed 's/，/,/g' | tr ',' '\n' | tr '[:lower:]' '[:upper:]' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//' | grep -v '^$' | awk '/^T-[0-9]+$/ { printf "T-%03d\n", substr($0, 3) + 0; next } { print }' || true; }
+
+if [[ "$action" == "pass" ]]; then
+  # 只认 P0–P3 表里状态格以「待验证」开头的行（第 4 格）；投递时的快照，合并时已不是待验证的由调度员跳过
+  pending="$(awk -F'|' '
+    /^##[[:space:]]/ { intask = ($0 ~ /^##[[:space:]]+P[0-3]/) ; next }
+    intask && $2 ~ /^[[:space:]]*T-[0-9]+[[:space:]]*$/ {
+      id=$2; st=$5; gsub(/[[:space:]`]/, "", id); gsub(/[[:space:]`]/, "", st)
+      if (st ~ /^待验证/) print id
+    }' "$root/.claude/backlog.md")"
+  ids="$(printf '%s\n' "$*" | tr ' ' '\n' | norm_ids)"
+  [[ -n "$ids" ]] || ids="$pending"
+  skip="$(printf '%s\n' "$except" | norm_ids)"
+  [[ -n "$ids" ]] || { echo "backlog 里没有待验证的任务"; exit 0; }
+  n=0
+  while IFS= read -r id; do
+    [[ "$id" =~ ^T-[0-9]+$ ]] || { echo "跳过无效 ID: $id" >&2; continue; }
+    grep -qxF "$id" <<<"$skip" && continue
+    grep -qxF "$id" <<<"$pending" || echo "⚠ $id 当前不是待验证，仍投递，调度员合并时会核对" >&2
+    write_inbox "$id" "通过（qtask --pass 批量确认）"; n=$((n+1))
+  done <<<"$ids"
+  echo "共投递 $n 条通过确认"
+  exit 0
+fi
+
 body="$*"
 if [[ -z "$body" ]]; then
   [[ -t 0 ]] && echo "输入内容，Ctrl-D 结束：" >&2
   body="$(cat)"
 fi
 [[ -n "${body//[[:space:]]/}" ]] || { echo "内容为空" >&2; exit 1; }
-if [[ "$type" == "decision" && ! "$ref" =~ ^T-[0-9]+$ ]]; then echo "-d 需要任务 ID，如 T-111" >&2; exit 1; fi
+refs="$(printf '%s\n' "$ref" | norm_ids)"
+if [[ "$type" == "decision" ]]; then
+  [[ -n "$refs" ]] || { echo "-d 需要任务 ID，如 T-111" >&2; exit 1; }
+  while IFS= read -r r; do [[ "$r" =~ ^T-[0-9]+$ ]] || { echo "-d 需要任务 ID，如 T-111（多个用逗号分隔）: $r" >&2; exit 1; }; done <<<"$refs"
+fi
 if [[ -n "$priority" && ! "$priority" =~ ^P[0-3]$ ]]; then echo "-p 只接受 P0-P3" >&2; exit 1; fi
 
-name="$(date '+%Y%m%d-%H%M%S')-$$-$RANDOM.md"
-tmp="$inbox/.tmp-$name"
-{
-  echo "---"
-  echo "type: $type"
-  [[ -n "$priority" ]] && echo "priority: $priority"
-  [[ -n "$ref" ]] && echo "ref: $ref"
-  echo "created: $(date '+%F %T')"
-  echo "---"
-  printf '%s\n' "$body"
-} > "$tmp"
-mv "$tmp" "$inbox/$name"
-echo "已投递 [$type${ref:+ $ref}${priority:+ $priority}] → .claude/inbox/$name"
+if [[ "$type" == "decision" ]]; then
+  while IFS= read -r r; do write_inbox "$r" "$body"; done <<<"$refs"
+else
+  write_inbox "" "$body"
+fi
