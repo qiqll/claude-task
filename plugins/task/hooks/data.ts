@@ -94,6 +94,48 @@ function derivedFromOf(note: string): string {
   return /衍生自\s*(T-\d+)/.exec(note)?.[1] ?? ''
 }
 
+/** Note clauses the verify fields show (怎么验 / 待验证起 / 超时预告), so the note need not repeat them. */
+export const VERIFY_CLAUSE = /^(怎么验|待验证起|超时预告)[：:]/
+
+/** The last clause of the note starting with `key：`, its value; '' when none. The last wins: a redelivery restates it. */
+function clauseValue(note: string, key: string): string {
+  let value = ''
+  for (const c of noteClauses(note)) {
+    const m = new RegExp(`^${key}[：:]\\s*(.+)$`).exec(c)
+    if (m) value = m[1]!.trim()
+  }
+  return value
+}
+
+const dayOf = (text: string): string => /\d{4}-\d{2}-\d{2}/.exec(text)?.[0] ?? ''
+
+/** Default 待验证 timeout in days when backlog.md states none. */
+export const DEFAULT_VERIFY_TIMEOUT_DAYS = 7
+
+/** `**待验证超时：** 7 天` anywhere in backlog.md; 0 turns default pass off. */
+export function verifyTimeoutOf(md: string): number {
+  const m = /待验证超时[：:]\s*\**\s*(\d+)/.exec(md)
+  return m ? Number(m[1]) : DEFAULT_VERIFY_TIMEOUT_DAYS
+}
+
+/**
+ * Where a 待验证 task stands against the timeout, in whole local days from `verifySince`:
+ * `left` days until it passes by default (≤ 0: due at the next check). null when off or the day is unknown.
+ */
+export function verifyExpiry(task: Pick<Task, 'verifySince' | 'expiryNotice'>, timeoutDays: number, now: number): { due: string; left: number; noticed: boolean } | null {
+  if (timeoutDays <= 0 || !task.verifySince) return null
+  const [y, m, d] = task.verifySince.split('-').map(Number) as [number, number, number]
+  const since = new Date(y, m - 1, d)
+  const dueDate = new Date(y, m - 1, d + timeoutDays)
+  const today = new Date(now)
+  const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate())
+  if (Number.isNaN(since.getTime())) return null
+  const pad = (n: number) => String(n).padStart(2, '0')
+  const due = `${dueDate.getFullYear()}-${pad(dueDate.getMonth() + 1)}-${pad(dueDate.getDate())}`
+  const left = Math.round((dueDate.getTime() - todayStart.getTime()) / DAY_MS)
+  return { due, left, noticed: task.expiryNotice !== '' }
+}
+
 export type Backlog = { tasks: Task[]; decisions: Decision[]; humanBlocks: HumanBlock[] }
 
 const HUMAN_STATUS = /^`?(已|待|进行|本机|关闭|取消)/
@@ -136,6 +178,9 @@ export function parseBacklog(md: string): Backlog {
         note,
         acceptance: acceptanceOf(note),
         derivedFrom: derivedFromOf(note),
+        howToVerify: clauseValue(note, '怎么验'),
+        verifySince: dayOf(clauseValue(note, '待验证起')),
+        expiryNotice: dayOf(clauseValue(note, '超时预告')),
       })
     } else if (section === 'decision' && /^T-\d+/.test(id)) {
       decisions.push({ task: taskIdIn(id) ?? id, question: cells[1] ?? '', options: cells[2] ?? '', since: cells[3] ?? '' })
@@ -325,6 +370,18 @@ export function metricsOf(tasks: Task[], archive: Archive, events: LogEvent[], n
   for (const t of tasks) if (t.status === '打回') redone.add(t.id)
   // Every source above counts only tasks run.log delivered.
   for (const id of redone) if (!delivered.has(id)) redone.delete(id)
+  // Closed with nobody looking (auto-accepted on delivery, or passed by the 待验证 timeout): no evidence it
+  // passed a person, so it leaves first pass unless it came back anyway.
+  const unattended = new Set<string>()
+  let autoClosed = 0
+  for (const e of events) {
+    if (!/^T-\d+$/.test(e.subject)) continue
+    if (e.event === 'TIMEOUT_PASS' || /^DONE[^→]*→\s*已完成/.test(e.event)) {
+      unattended.add(e.subject)
+      autoClosed++
+    }
+  }
+  const judged = [...delivered].filter(id => redone.has(id) || !unattended.has(id)).length
 
   const cycles: number[] = []
   const dispatched = new Map<string, number>()
@@ -342,10 +399,11 @@ export function metricsOf(tasks: Task[], archive: Archive, events: LogEvent[], n
     completionRate: total ? completed / total : null,
     deliveryRate: total ? (completed + verify) / total : null,
     delivered: delivered.size,
-    firstPassRate: delivered.size ? (delivered.size - redone.size) / delivered.size : null,
+    firstPassRate: judged ? (judged - redone.size) / judged : null,
     redo: redone.size,
     delivered7d,
     archived7d: archive.dates.filter(d => d >= weekAgo).length,
+    autoClosed,
     medianCycleMs: median(cycles),
     ...humanMetricsOf(tasks, events),
   }
@@ -493,6 +551,7 @@ export function buildSnapshot(root: string | null, files: PoolFiles, now: number
     metrics: metricsOf(tasks, archive, events, now),
     events: events.slice(-40),
     inbox: files.inbox,
+    verifyTimeoutDays: verifyTimeoutOf(files.backlog ?? ''),
   }
 }
 

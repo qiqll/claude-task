@@ -20,6 +20,8 @@ import {
   normalizeStatus,
   splitRow,
   transitions,
+  verifyExpiry,
+  verifyTimeoutOf,
   wrapCells,
 } from './data'
 import { BACKLOG, CURRENT, PROGRESS, RUN_LOG } from './fixtures'
@@ -279,6 +281,44 @@ describe('snapshot', () => {
     expect(first(`${redelivered}2026-11-15 12:00:00 | T-071 | REJECTED | 还不对\n`, rejectedNow)).toMatchObject({ redo: 1, firstPassRate: 0.5 })
     // A REJECTED for a task run.log never delivered changes nothing.
     expect(first(`${log}2026-11-15 11:00:00 | T-200 | REJECTED | 不对\n`)).toMatchObject({ delivered: 2, redo: 0, firstPassRate: 1 })
+  })
+
+  test('closed with nobody looking (auto-accepted, timeout pass) is counted apart and left out of first pass', () => {
+    const first = (log: string) => buildSnapshot('/proj', { backlog: BACKLOG, runLog: log, hasStopFile: false, inbox: 0 }, NOW).metrics
+    const log = `2026-11-15 10:00:00 | T-071 | DISPATCH | nonce=a
+2026-11-15 10:10:00 | T-071 | DONE→待验证 | commits 1
+2026-11-15 10:20:00 | T-105 | DISPATCH | nonce=b
+2026-11-15 10:30:00 | T-105 | DONE→已完成（自动验收） | commits 1
+2026-11-15 10:40:00 | T-107 | DISPATCH | nonce=c
+2026-11-15 10:50:00 | T-107 | DONE→待验证 | commits 1
+2026-11-15 11:00:00 | T-107 | TIMEOUT_PASS | 7 天无人打回
+`
+    expect(first(log)).toMatchObject({ delivered: 3, autoClosed: 2, redo: 0, firstPassRate: 1 })
+    // Only T-071 was judged by a person; once it is rejected the rate says so, not 2/3.
+    expect(first(`${log}2026-11-15 11:10:00 | T-071 | REJECTED | 不对\n`)).toMatchObject({ redo: 1, firstPassRate: 0 })
+    // An auto-closed task rejected afterwards is judged after all: it came back.
+    expect(first(`${log}2026-11-15 11:10:00 | T-105 | REJECTED | 不对\n`)).toMatchObject({ redo: 1, firstPassRate: 0.5 })
+    // Nothing judged by a person: no rate rather than 100%.
+    expect(first('2026-11-15 10:30:00 | T-105 | DONE→已完成（自动验收） | commits 1\n').firstPassRate).toBeNull()
+  })
+
+  test('verify clauses: 怎么验 / 待验证起 / 超时预告, the last one written wins', () => {
+    const md = '## P1 — 重要\n\n| ID | 任务 | 模块 | 状态 | 依赖 | 备注 |\n|--|--|--|--|--|--|\n| T-1 | a | m | 待验证 | — | 验收：pytest x；待验证起：2026-11-01；怎么验：老步骤；打回：日期不对；待验证起：2026-11-10；怎么验：跑 `bun test a\\|b` 看 3 项通过；超时预告：2026-11-16 |\n'
+    const t = parseBacklog(md).tasks[0]!
+    expect(t).toMatchObject({ verifySince: '2026-11-10', howToVerify: '跑 `bun test a|b` 看 3 项通过', expiryNotice: '2026-11-16' })
+    expect(parseBacklog(BACKLOG).tasks[2]).toMatchObject({ howToVerify: '', verifySince: '', expiryNotice: '' })
+  })
+
+  test('the 待验证 timeout: 7 days unless backlog.md says otherwise, 0 is off; days left count local days', () => {
+    expect(verifyTimeoutOf('')).toBe(7)
+    expect(verifyTimeoutOf('**待验证超时：** 3 天（0 = 关闭）')).toBe(3)
+    expect(verifyTimeoutOf('待验证超时: 0')).toBe(0)
+    const now = new Date(2026, 10, 15, 23, 30).getTime()
+    expect(verifyExpiry({ verifySince: '2026-11-10', expiryNotice: '' }, 7, now)).toEqual({ due: '2026-11-17', left: 2, noticed: false })
+    expect(verifyExpiry({ verifySince: '2026-11-09', expiryNotice: '2026-11-15' }, 7, now)).toEqual({ due: '2026-11-16', left: 1, noticed: true })
+    expect(verifyExpiry({ verifySince: '2026-10-01', expiryNotice: '' }, 7, now)?.left).toBeLessThan(0)
+    expect(verifyExpiry({ verifySince: '2026-11-10', expiryNotice: '' }, 0, now)).toBeNull()
+    expect(verifyExpiry({ verifySince: '', expiryNotice: '' }, 7, now)).toBeNull()
   })
 
   test('human metrics with no run.log are empty and render as —', () => {

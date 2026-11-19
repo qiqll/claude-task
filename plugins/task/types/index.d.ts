@@ -11,6 +11,12 @@ export type Task = {
   note: string
   acceptance: string
   derivedFrom: string
+  /** `怎么验：…` — how to check a delivered task, ≤3 steps. */
+  howToVerify: string
+  /** `待验证起：YYYY-MM-DD` — the day it entered 待验证; '' when not recorded. */
+  verifySince: string
+  /** `超时预告：YYYY-MM-DD` — the day the dispatcher warned it would pass by default; '' when not warned. */
+  expiryNotice: string
 }
 
 export type Decision = { task: string; question: string; options: string; since: string }
@@ -52,6 +58,8 @@ export type Metrics = {
   redo: number
   delivered7d: number
   archived7d: number
+  /** Tasks closed with nobody looking: `DONE→已完成（自动验收）` ends plus `TIMEOUT_PASS` lines. Left out of first pass. */
+  autoClosed: number
   medianCycleMs: number | null
   /** Runs ended in 待决策 / 阻塞 plus rejections (`REJECTED` lines); null with nothing in run.log to count. */
   interventions: number | null
@@ -90,6 +98,8 @@ export type Snapshot = {
   metrics: Metrics
   events: LogEvent[]
   inbox: number
+  /** `待验证超时：N 天` in backlog.md, 7 when absent; 0 turns default pass off. */
+  verifyTimeoutDays: number
 }
 
 export type AgentRow = {

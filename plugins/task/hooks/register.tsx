@@ -11,6 +11,8 @@ import {
   isOpenHumanBlock,
   loopStatusOf,
   noteClauses,
+  VERIFY_CLAUSE,
+  verifyExpiry,
   parseCurrent,
   parseRunLog,
   parseSession,
@@ -263,6 +265,7 @@ function reportText(snap: Snapshot, agentList: AgentRow[], busy: Busy, now: numb
       `${L.stats.rollback} ${percent(m.rollbackRate)}`,
       `${L.stats.wip} ${c['进行中'] ?? 0}`,
       `${L.stats.verify} ${c['待验证'] ?? 0}`,
+      `${L.stats.autoClosed} ${m.autoClosed}`,
       `${L.stats.archived} ${c.archived}`,
     ].join(' · '),
   )
@@ -271,7 +274,13 @@ function reportText(snap: Snapshot, agentList: AgentRow[], busy: Busy, now: numb
   const tasks = [...open].sort((a, b) => order(a) - order(b))
   const shown = all ? tasks : tasks.slice(0, REPORT_TASKS)
   out.push('', `■ ${L.tasks} ${L.count(open.length)}`)
-  for (const t of shown) out.push(`  ${t.priority || '—'} ${t.id} [${statusLabel(L, t.status, t.statusLabel)}] ${t.title}${t.deps && t.deps !== '—' ? `  (${L.deps(t.deps)})` : ''}`)
+  for (const t of shown) {
+    out.push(`  ${t.priority || '—'} ${t.id} [${statusLabel(L, t.status, t.statusLabel)}] ${t.title}${t.deps && t.deps !== '—' ? `  (${L.deps(t.deps)})` : ''}`)
+    if (t.status !== '待验证') continue
+    const expiry = verifyExpiry(t, snap.verifyTimeoutDays, now)
+    const parts = [t.howToVerify ? L.pair(L.fields.howToVerify, t.howToVerify) : null, expiry ? L.expiry(expiry.left, expiry.due, expiry.noticed) : null].filter(Boolean)
+    if (parts.length) out.push(`      ${parts.join(' · ')}`)
+  }
   if (shown.length < tasks.length) out.push(`  ${L.more(tasks.length - shown.length)}`)
   if (snap.decisions.length) {
     out.push('', `■ ${L.decisions} ${L.decisionsExtra(snap.decisions.length)}`)
@@ -601,10 +610,13 @@ const MIN_VALUE_CELLS = 12
  * shows. Only that one is dropped: a later 验收 (a delivery's own) stays in the note.
  */
 function noteLines(task: Task): string[] {
-  const clauses = noteClauses(task.note)
+  // 怎么验 / 待验证起 / 超时预告 have fields of their own on a 待验证 card; elsewhere they stay in the note.
+  const clauses = noteClauses(task.note).filter(c => task.status !== '待验证' || !VERIFY_CLAUSE.test(c))
   const shown = clauses.findIndex(c => /^验收[：:]/.test(c) && clauseAcceptance(c) === task.acceptance)
   return shown < 0 ? clauses : clauses.filter((_, i) => i !== shown)
 }
+
+type Expiry = ReturnType<typeof verifyExpiry>
 
 /** Bullet before each clause of a field of several. */
 const BULLET_CELLS = 2
@@ -653,7 +665,7 @@ function Field({ els, fieldKey, label, labelCells, valueCells, stacked, lines, d
 }
 
 /** An open task row: the whole title, then module / deps / origin / acceptance / notes as aligned fields, in a card like the current task's. */
-function TaskDetail({ els, task, isCurrent, cols }: { els: Els; task: Task; isCurrent: boolean; cols: number }) {
+function TaskDetail({ els, task, isCurrent, cols, expiry }: { els: Els; task: Task; isCurrent: boolean; cols: number; expiry: Expiry }) {
   const { Box, Text } = els
   const F = L.fields
   const fields: { name: string; label: string; lines: string[]; dim?: boolean }[] = [
@@ -662,6 +674,10 @@ function TaskDetail({ els, task, isCurrent, cols }: { els: Els; task: Task; isCu
   if (task.deps && task.deps !== '—') fields.push({ name: 'deps', label: F.deps, lines: [task.deps] })
   if (task.derivedFrom) fields.push({ name: 'derivedFrom', label: F.derivedFrom, lines: [task.derivedFrom] })
   if (task.acceptance) fields.push({ name: 'acceptance', label: F.acceptance, lines: [task.acceptance] })
+  if (task.status === '待验证') {
+    fields.push({ name: 'howToVerify', label: F.howToVerify, lines: [task.howToVerify || L.noHowToVerify], dim: !task.howToVerify })
+    if (expiry) fields.push({ name: 'expiry', label: F.expiry, lines: [L.expiry(expiry.left, expiry.due, expiry.noticed)] })
+  }
   const notes = noteLines(task)
   fields.push({ name: 'note', label: F.note, lines: notes.length ? notes : [L.noNote], dim: true })
   // Sized for every label, not just this card's, so values start at one column in every open row.
@@ -685,7 +701,7 @@ function TaskDetail({ els, task, isCurrent, cols }: { els: Els; task: Task; isCu
   )
 }
 
-function taskRow($: EngineInterface, els: Els, task: Task, isOpen: boolean, isCurrent: boolean, cols: number) {
+function taskRow($: EngineInterface, els: Els, task: Task, isOpen: boolean, isCurrent: boolean, cols: number, expiry: Expiry = null) {
   const { Box, Text, Button } = els
   const leadCells = cellWidth(`${task.priority || '—'} ▸ ${task.id} `)
   // A suffixed status (待验证✗验证失败) keeps only its name where the whole would leave the title no room.
@@ -711,7 +727,7 @@ function taskRow($: EngineInterface, els: Els, task: Task, isOpen: boolean, isCu
         </Box>
         <StatusTag els={els} tagKey={`tag:${task.id}`} status={task.status} label={label} width={Math.max(0, Math.min(tagCells(label), cols - leadCells))} />
       </Box>
-      {isOpen ? <TaskDetail els={els} task={task} isCurrent={isCurrent} cols={cols} /> : null}
+      {isOpen ? <TaskDetail els={els} task={task} isCurrent={isCurrent} cols={cols} expiry={expiry} /> : null}
     </Box>
   )
 }
@@ -829,6 +845,7 @@ async function drawPane($: EngineInterface, els: Els, cols: number) {
         <Stat els={els} width={tile} label={L.stats.rollback} value={percent(m.rollbackRate)} color={m.rollbackRate ? 'error' : undefined} />
         <Stat els={els} width={tile} label={L.stats.wip} value={`${c['进行中'] ?? 0}`} color={(c['进行中'] ?? 0) > 1 ? 'error' : 'success'} />
         <Stat els={els} width={tile} label={L.stats.verify} value={`${c['待验证'] ?? 0}`} color={c['待验证'] ? 'warning' : undefined} />
+        <Stat els={els} width={tile} label={L.stats.autoClosed} value={`${m.autoClosed}`} />
         <Stat els={els} width={tile} label={L.stats.archived} value={`${c.archived}`} />
       </Box>
       <Rule els={els} cols={cols} />
@@ -847,7 +864,7 @@ async function drawPane($: EngineInterface, els: Els, cols: number) {
         ))}
       </Box>
       {shown.length ? (
-        shown.map(t => taskRow($, els, t, opened === t.id, snap.current?.task === t.id, cols))
+        shown.map(t => taskRow($, els, t, opened === t.id, snap.current?.task === t.id, cols, t.status === '待验证' ? verifyExpiry(t, snap.verifyTimeoutDays, now) : null))
       ) : (
         <Text dimColor>{L.noneInFilter}</Text>
       )}
