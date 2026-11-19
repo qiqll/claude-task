@@ -2,6 +2,10 @@
 
 All notable changes to the `task` plugin. Versions follow [semver](https://semver.org/); the version in `plugins/task/.claude-plugin/plugin.json` is what Claude Code uses to detect updates.
 
+## 0.3.13 — 2026-11-19
+
+- Derived tasks are now always recorded as P3 「AI 衍生 P3，只录不做」 and are never dispatched; raise the priority yourself to have one done. The only exception is a security issue a reviewer rated High or Critical: the worker's `DERIVED` line now carries `级别 安全 High|安全 Critical|一般`, and a task is queued as before (no higher than its parent) only when it is marked as a security High/Critical issue and its source is a reviewer finding ID. A baseline repair after `BASELINE_RED` follows the same rule, so the blocked task waits until you raise that repair task's priority.
+
 ## 0.3.12 — 2026-11-19
 
 Fewer tasks waiting on you in 待验证 (to verify):
