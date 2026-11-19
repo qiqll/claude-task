@@ -12,6 +12,7 @@ Fewer tasks waiting on you in 待验证 (to verify):
 - Rejecting an archived task (`qtask -d T-0NN "打回：…"`) reopens it. `dev-progress.md` records say how each task was closed: by the requester, by auto acceptance or by timeout.
 - `qtask`: `-d T-1,T-2 "…"` answers several tasks at once; `qtask --pass [IDs]` confirms all (or the given) tasks in 待验证, and `--except T-x` leaves some out. A stale pass for a task no longer in 待验证 is skipped. A loop counts as running while its last START / STOP line is START.
 - Pane: a 待验证 card shows 怎么验 and when it passes by default (or that it won't); a new 免验关闭 (Auto-closed) tile counts tasks closed without anyone looking, which are left out of the first-pass rate. `/task:status` lists tasks in 待验证 with days waiting, steps and due date, plus the `qtask --pass` command.
+- Look-first order: `skills/loop/verify_signals.sh` uses git only to rank each task in 待验证 by signs of use: did a later task, now archived or in 待验证, change the same files (shared files touched by 4+ tasks, tests, version files and changelogs don't count), and has a task that depends on it or derives from it been delivered. The expiry notice, `/task:status` and the pane's 待验证 filter list tasks with no sign and a user-visible change first, and tasks with signs of use (✓) last; within a tier, the one waiting longest comes first. This changes the order only, never whether a task closes.
 - Rules shared by the loop and `/task:next` are in `skills/loop/VERIFY.md`.
 
 ## 0.3.11 — 2026-11-18
