@@ -85,8 +85,8 @@ DECISION: <NEEDS_DECISION 时：问题 / 选项A（推荐）代价 / 选项B 代
 BLOCKER: <BLOCKED / BASELINE_RED / FAILED 时的原因与需要的动作；否则 —>
 VERIFY: <需求方怎么确认，≤3 步，步骤用 → 连接：优先一条可直接运行的命令或 URL，其次具体操作 + 预期结果；不写 ; ；和 · ，命令放反引号里；任何 | 都写成 \|>
 DERIVED:
-- [P2] <一句话任务> | 涉及文件 <路径> | 来源 <review M1 / security-analyst H2 / 同类缺陷 / …> | 级别 <安全 Critical / 安全 High / 一般>
-（没有填 —；最多 3 条，只收 Medium 及以上遗留或确证的同类缺陷，不收风格建议。调度员把衍生任务一律录为 P3 只录不做，只有 `级别` 为 `安全 High / 安全 Critical`、且 `来源` 是审查发现编号的才排队。所以 `安全 High / Critical` 只能照抄审查者给的定级，不许自己评；本该在本轮修掉的 High / Critical，修不掉才写到这里）
+- [P2] <一句话任务> | 涉及文件 <路径> | 来源 <review M1 / security-analyst H2 / 同类缺陷 / …> | 级别 <安全 Critical / 安全 High / High / Critical / 一般> | 审查原文 <级别为 High / Critical 时，照抄审查者对这条发现的定级与描述，截到 80 字；否则 —>
+（没有填 —；最多 3 条，只收 Medium 及以上遗留或确证的同类缺陷，不收风格建议。调度员把衍生任务一律录为 P3 只录不做，只有 `级别` 为 `安全 High / 安全 Critical`、且 `来源` 是审查发现编号的才排队。所以 `安全 High / Critical` 只能照抄审查者给的定级，不许自己评。本该在本轮修掉的 High / Critical，修不掉才写到这里，而且**每一条都必须写**，不论是安全问题还是正确性问题，并且要照审查原文定级；有这类遗留的任务，调度员不会让它默认通过）
 BRIEF:
 <给需求方看的简报：做了什么、改了哪些文件、请你怎么验证（与 VERIFY 一致）。5–10 行>
 === END REPORT ===
